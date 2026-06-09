@@ -1,0 +1,237 @@
+// This is your Prisma schema file
+// Learn more: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum Role {
+  ADMIN
+  CASHIER
+  INVENTORY_MANAGER
+}
+
+enum OrderStatus {
+  PENDING
+  PROCESSING
+  FULFILLED
+  CANCELED
+  REFUNDED
+}
+
+enum OrderType {
+  WALK_IN
+  ONLINE
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  MOBILE_MONEY
+  BANK_TRANSFER
+}
+
+enum StockMovementType {
+  IN
+  OUT
+  ADJUSTMENT
+  RETURN
+}
+
+// ─── Shop ────────────────────────────────────────────────────────────────────
+
+model Shop {
+  id          String   @id @default(cuid())
+  name        String
+  logo        String?
+  address     String?
+  phone       String?
+  email       String?
+  currency    String   @default("USD")
+  taxRate     Float    @default(0)
+  taxName     String   @default("Tax")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ─── Users ───────────────────────────────────────────────────────────────────
+
+model User {
+  id           String    @id @default(cuid())
+  name         String
+  email        String    @unique
+  passwordHash String
+  role         Role      @default(CASHIER)
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  orders       Order[]
+  sessions     Session[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([userId])
+}
+
+// ─── Catalog ─────────────────────────────────────────────────────────────────
+
+model Category {
+  id          String    @id @default(cuid())
+  name        String    @unique
+  description String?
+  color       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  products Product[]
+}
+
+model Product {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  sku         String?  @unique
+  barcode     String?  @unique
+  price       Float
+  costPrice   Float    @default(0)
+  categoryId  String?
+  imageUrl    String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  category       Category?        @relation(fields: [categoryId], references: [id])
+  variants       ProductVariant[]
+  orderItems     OrderItem[]
+  stockMovements StockMovement[]
+
+  @@index([categoryId])
+  @@index([barcode])
+  @@index([sku])
+}
+
+model ProductVariant {
+  id        String   @id @default(cuid())
+  productId String
+  name      String   // e.g. "Red / XL"
+  sku       String?  @unique
+  barcode   String?  @unique
+  price     Float?   // override parent price if set
+  stock     Int      @default(0)
+  lowStock  Int      @default(5) // alert threshold
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  product    Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  orderItems OrderItem[]
+
+  @@index([productId])
+}
+
+model StockMovement {
+  id        String            @id @default(cuid())
+  productId String
+  variantId String?
+  type      StockMovementType
+  quantity  Int
+  note      String?
+  createdAt DateTime          @default(now())
+
+  product Product @relation(fields: [productId], references: [id])
+
+  @@index([productId])
+}
+
+// ─── Customers ───────────────────────────────────────────────────────────────
+
+model Customer {
+  id        String   @id @default(cuid())
+  name      String
+  email     String?  @unique
+  phone     String?
+  address   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  orders Order[]
+}
+
+// ─── Orders ──────────────────────────────────────────────────────────────────
+
+model Order {
+  id            String        @id @default(cuid())
+  orderNumber   String        @unique
+  customerId    String?
+  cashierId     String
+  type          OrderType     @default(WALK_IN)
+  status        OrderStatus   @default(PENDING)
+  subtotal      Float
+  discountType  String?       // "percentage" | "fixed"
+  discountValue Float         @default(0)
+  discountAmt   Float         @default(0)
+  taxRate       Float         @default(0)
+  taxAmt        Float         @default(0)
+  total         Float
+  paymentMethod PaymentMethod @default(CASH)
+  note          String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  customer Customer?   @relation(fields: [customerId], references: [id])
+  cashier  User        @relation(fields: [cashierId], references: [id])
+  items    OrderItem[]
+  refunds  Refund[]
+
+  @@index([customerId])
+  @@index([cashierId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model OrderItem {
+  id        String  @id @default(cuid())
+  orderId   String
+  productId String
+  variantId String?
+  name      String  // snapshot at time of sale
+  sku       String?
+  price     Float
+  quantity  Int
+  total     Float
+
+  order   Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product        @relation(fields: [productId], references: [id])
+  variant ProductVariant? @relation(fields: [variantId], references: [id])
+
+  @@index([orderId])
+  @@index([productId])
+}
+
+model Refund {
+  id        String   @id @default(cuid())
+  orderId   String
+  amount    Float
+  reason    String?
+  createdAt DateTime @default(now())
+
+  order Order @relation(fields: [orderId], references: [id])
+
+  @@index([orderId])
+}
