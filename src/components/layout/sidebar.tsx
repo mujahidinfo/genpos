@@ -3,7 +3,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, Package, ShoppingCart, Users, BarChart3,
-  Settings, Receipt, Menu, X, Store
+  Settings, Receipt, Menu, X, Store, Wallet,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { AuthUser } from "@/lib/auth";
@@ -16,36 +16,38 @@ const navItems = [
   { label: "Inventory", href: "/inventory", icon: Package, roles: ["ADMIN", "INVENTORY_MANAGER"] },
   { label: "Customers", href: "/customers", icon: Users, roles: ["ADMIN", "CASHIER"] },
   { label: "Analytics", href: "/analytics", icon: BarChart3, roles: ["ADMIN"] },
+  { label: "Finance", href: "/finance", icon: Wallet, roles: ["ADMIN"] },
   { label: "Settings", href: "/settings", icon: Settings, roles: ["ADMIN"] },
 ] as const;
+
+type NavItem = (typeof navItems)[number];
 
 interface SidebarProps {
   user: AuthUser;
 }
 
-export function Sidebar({ user }: SidebarProps) {
-  const pathname = usePathname();
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const visibleItems = navItems.filter((item) =>
-    (item.roles as readonly string[]).includes(user.role)
-  );
-  const initials = user.name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
+interface NavContentProps {
+  items: NavItem[];
+  pathname: string;
+  onNavigate: () => void;
+}
 
-  const NavContent = () => (
+function NavContent({ items, pathname, onNavigate }: NavContentProps) {
+  return (
     <nav className="flex flex-col gap-0.5 px-3 py-4 flex-1">
-      {visibleItems.map((item) => {
+      {items.map((item) => {
         const Icon = item.icon;
         const active = pathname === item.href || pathname.startsWith(item.href + "/");
         return (
           <Link
             key={item.href}
             href={item.href}
-            onClick={() => setMobileOpen(false)}
+            onClick={onNavigate}
             className={cn(
               "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-150",
               active
                 ? "bg-indigo-600 text-white shadow-sm"
-                : "text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+                : "text-slate-500 hover:bg-slate-100 hover:text-slate-800",
             )}
           >
             <Icon className="h-4 w-4 shrink-0" />
@@ -55,8 +57,15 @@ export function Sidebar({ user }: SidebarProps) {
       })}
     </nav>
   );
+}
 
-  const UserSection = () => (
+interface UserSectionProps {
+  user: AuthUser;
+  initials: string;
+}
+
+function UserSection({ user, initials }: UserSectionProps) {
+  return (
     <div className="px-3 pb-4 pt-2 border-t border-slate-100">
       <div className="flex items-center gap-3 px-2 py-2.5 rounded-xl">
         <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center shrink-0">
@@ -71,6 +80,21 @@ export function Sidebar({ user }: SidebarProps) {
       </div>
     </div>
   );
+}
+
+export function Sidebar({ user }: SidebarProps) {
+  const pathname = usePathname();
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  const visibleItems = navItems.filter((item) =>
+    (item.roles as readonly string[]).includes(user.role),
+  );
+  const initials = user.name
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
 
   return (
     <>
@@ -85,8 +109,8 @@ export function Sidebar({ user }: SidebarProps) {
             <p className="text-xs text-slate-400 mt-0.5">Point of Sale</p>
           </div>
         </div>
-        <NavContent />
-        <UserSection />
+        <NavContent items={visibleItems} pathname={pathname} onNavigate={() => {}} />
+        <UserSection user={user} initials={initials} />
       </aside>
 
       {/* Mobile trigger */}
@@ -107,8 +131,12 @@ export function Sidebar({ user }: SidebarProps) {
                 </div>
                 <p className="font-bold text-slate-900">GenPOS</p>
               </div>
-              <NavContent />
-              <UserSection />
+              <NavContent
+                items={visibleItems}
+                pathname={pathname}
+                onNavigate={() => setMobileOpen(false)}
+              />
+              <UserSection user={user} initials={initials} />
             </div>
             <div
               className="flex-1 bg-black/40 backdrop-blur-sm"

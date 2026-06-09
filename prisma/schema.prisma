@@ -45,6 +45,26 @@ enum StockMovementType {
   RETURN
 }
 
+enum SalaryType {
+  MONTHLY
+  HOURLY
+  WEEKLY
+  ANNUALLY
+}
+
+enum ExpenseStatus {
+  PAID
+  PENDING
+  CANCELLED
+}
+
+enum BudgetPeriod {
+  WEEKLY
+  MONTHLY
+  QUARTERLY
+  YEARLY
+}
+
 // ─── Shop ────────────────────────────────────────────────────────────────────
 
 model Shop {
@@ -234,4 +254,75 @@ model Refund {
   order Order @relation(fields: [orderId], references: [id])
 
   @@index([orderId])
+}
+
+// ─── Finance ─────────────────────────────────────────────────────────────────
+
+model ExpenseCategory {
+  id        String    @id @default(cuid())
+  name      String    @unique
+  color     String    @default("#6366f1")
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  expenses Expense[]
+  budgets  Budget[]
+}
+
+model Employee {
+  id         String     @id @default(cuid())
+  name       String
+  email      String?    @unique
+  phone      String?
+  position   String
+  salary     Float
+  salaryType SalaryType @default(MONTHLY)
+  joinDate   DateTime
+  isActive   Boolean    @default(true)
+  notes      String?
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  expenses Expense[]
+
+  @@index([isActive])
+}
+
+model Expense {
+  id            String          @id @default(cuid())
+  title         String
+  amount        Float
+  date          DateTime
+  categoryId    String
+  employeeId    String?
+  paymentMethod PaymentMethod   @default(CASH)
+  status        ExpenseStatus   @default(PAID)
+  isRecurring   Boolean         @default(false)
+  notes         String?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  category ExpenseCategory @relation(fields: [categoryId], references: [id])
+  employee Employee?       @relation(fields: [employeeId], references: [id])
+
+  @@index([categoryId])
+  @@index([employeeId])
+  @@index([date])
+  @@index([status])
+}
+
+model Budget {
+  id         String           @id @default(cuid())
+  name       String
+  amount     Float
+  period     BudgetPeriod     @default(MONTHLY)
+  startDate  DateTime
+  endDate    DateTime?
+  categoryId String?
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+
+  category ExpenseCategory? @relation(fields: [categoryId], references: [id])
+
+  @@index([categoryId])
 }

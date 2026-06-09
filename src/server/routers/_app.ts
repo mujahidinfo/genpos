@@ -7,6 +7,7 @@ import { analyticsRouter } from "./analytics";
 import { shopRouter } from "./shop";
 import { usersRouter } from "./users";
 import { categoriesRouter } from "./categories";
+import { financeRouter } from "./finance";
 
 export const appRouter = router({
   auth: authRouter,
@@ -17,6 +18,7 @@ export const appRouter = router({
   shop: shopRouter,
   users: usersRouter,
   categories: categoriesRouter,
+  finance: financeRouter,
 });
 
 export type AppRouter = typeof appRouter;
