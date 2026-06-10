@@ -6,6 +6,7 @@ import { trpc } from "@/lib/trpc/client";
 import { useFormatCurrency } from "@/lib/currency-context";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import { useTranslation, type TranslationKey } from "@/lib/i18n/language-context";
 import type { Prisma } from "@prisma/client";
 import { FinanceNav } from "@/components/finance/finance-nav";
 
@@ -69,14 +70,14 @@ interface CategoryForm {
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
-const STATUS_CONFIG: Record<ExpenseStatus, { label: string; className: string }> = {
-  PAID:      { label: "Paid",      className: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-  PENDING:   { label: "Pending",   className: "bg-amber-50 text-amber-700 border-amber-200"       },
-  CANCELLED: { label: "Cancelled", className: "bg-slate-100 text-slate-600 border-slate-200"      },
+const STATUS_CONFIG: Record<ExpenseStatus, { labelKey: TranslationKey; className: string }> = {
+  PAID:      { labelKey: "finance.statusPaid",      className: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+  PENDING:   { labelKey: "finance.statusPending",   className: "bg-amber-50 text-amber-700 border-amber-200"       },
+  CANCELLED: { labelKey: "finance.statusCancelled", className: "bg-slate-100 text-slate-600 border-slate-200"      },
 };
 
-const PAYMENT_LABELS: Record<PaymentMethod, string> = {
-  CASH: "Cash", CARD: "Card", MOBILE_MONEY: "Mobile Money", BANK_TRANSFER: "Bank Transfer",
+const PAYMENT_LABEL_KEYS: Record<PaymentMethod, TranslationKey> = {
+  CASH: "sales.payCash", CARD: "sales.payCard", MOBILE_MONEY: "sales.payMobile", BANK_TRANSFER: "sales.payBankTransfer",
 };
 
 const PRESET_COLORS = [
@@ -91,6 +92,7 @@ const PAGE_SIZE = 15;
 export function ExpensesView() {
   const { toast } = useToast();
   const formatCurrency = useFormatCurrency();
+  const { t, language } = useTranslation();
   const utils = trpc.useUtils();
 
   const [page, setPage] = useState(1);
@@ -125,7 +127,7 @@ export function ExpensesView() {
       utils.finance.expenses.list.invalidate();
       utils.finance.overview.invalidate();
       setExpenseDialog(null);
-      toast({ title: "Expense added" });
+      toast({ title: t("finance.expenseAdded") });
     },
     onError: (e) => toast({ title: e.message, variant: "destructive" }),
   });
@@ -135,7 +137,7 @@ export function ExpensesView() {
       utils.finance.expenses.list.invalidate();
       utils.finance.overview.invalidate();
       setExpenseDialog(null);
-      toast({ title: "Expense updated" });
+      toast({ title: t("finance.expenseUpdated") });
     },
     onError: (e) => toast({ title: e.message, variant: "destructive" }),
   });
@@ -145,7 +147,7 @@ export function ExpensesView() {
       utils.finance.expenses.list.invalidate();
       utils.finance.overview.invalidate();
       setDeleteConfirm(null);
-      toast({ title: "Expense deleted" });
+      toast({ title: t("finance.expenseDeleted") });
     },
     onError: (e) => toast({ title: e.message, variant: "destructive" }),
   });
@@ -209,17 +211,17 @@ export function ExpensesView() {
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Finance</h1>
-          <p className="text-sm text-slate-500 mt-0.5">Expense tracking and management</p>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">{t("finance.title")}</h1>
+          <p className="text-sm text-slate-500 mt-0.5">{t("finance.expensesSubtitle")}</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={() => setCatDialog(true)}>
             <Tag className="h-4 w-4 mr-1.5" />
-            Categories
+            {t("finance.categories")}
           </Button>
           <Button size="sm" onClick={openAdd}>
             <Plus className="h-4 w-4 mr-1.5" />
-            Add Expense
+            {t("finance.addExpense")}
           </Button>
         </div>
       </div>
@@ -233,7 +235,7 @@ export function ExpensesView() {
             <div className="relative flex-1 min-w-[180px]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
               <Input
-                placeholder="Search expenses…"
+                placeholder={t("finance.searchExpenses")}
                 value={search}
                 onChange={(e) => { setSearch(e.target.value); setPage(1); }}
                 className="pl-9 h-9"
@@ -242,36 +244,36 @@ export function ExpensesView() {
 
             <Select value={filterCategory} onValueChange={(v) => { setFilterCategory(v === "all" ? "" : v); setPage(1); }}>
               <SelectTrigger className="h-9 w-40">
-                <SelectValue placeholder="All categories" />
+                <SelectValue placeholder={t("finance.allCategories")} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All categories</SelectItem>
+                <SelectItem value="all">{t("finance.allCategories")}</SelectItem>
                 {categories?.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
               </SelectContent>
             </Select>
 
             <Select value={filterStatus} onValueChange={(v) => { setFilterStatus(v === "all" ? "" : v as ExpenseStatus); setPage(1); }}>
               <SelectTrigger className="h-9 w-36">
-                <SelectValue placeholder="All statuses" />
+                <SelectValue placeholder={t("finance.allStatuses")} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All statuses</SelectItem>
-                <SelectItem value="PAID">Paid</SelectItem>
-                <SelectItem value="PENDING">Pending</SelectItem>
-                <SelectItem value="CANCELLED">Cancelled</SelectItem>
+                <SelectItem value="all">{t("finance.allStatuses")}</SelectItem>
+                <SelectItem value="PAID">{t("finance.statusPaid")}</SelectItem>
+                <SelectItem value="PENDING">{t("finance.statusPending")}</SelectItem>
+                <SelectItem value="CANCELLED">{t("finance.statusCancelled")}</SelectItem>
               </SelectContent>
             </Select>
 
             <div className="flex items-center gap-1.5">
               <Input type="date" value={fromDate} onChange={(e) => { setFromDate(e.target.value); setPage(1); }} className="h-9 w-36 text-sm" />
-              <span className="text-slate-400 text-xs">to</span>
+              <span className="text-slate-400 text-xs">{t("finance.to")}</span>
               <Input type="date" value={toDate} onChange={(e) => { setToDate(e.target.value); setPage(1); }} className="h-9 w-36 text-sm" />
             </div>
 
             {hasFilters && (
               <Button variant="ghost" size="sm" onClick={clearFilters} className="h-9 text-slate-500">
                 <X className="h-3.5 w-3.5 mr-1" />
-                Clear
+                {t("finance.clear")}
               </Button>
             )}
           </div>
@@ -288,10 +290,10 @@ export function ExpensesView() {
           ) : (data?.items.length ?? 0) === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-slate-400">
               <Receipt className="h-10 w-10 mb-3 opacity-30" />
-              <p className="text-sm font-medium">No expenses found</p>
+              <p className="text-sm font-medium">{t("finance.noExpensesFound")}</p>
               {hasFilters && (
                 <button onClick={clearFilters} className="mt-2 text-xs text-indigo-500 hover:underline">
-                  Clear filters
+                  {t("finance.clearFilters")}
                 </button>
               )}
             </div>
@@ -300,12 +302,12 @@ export function ExpensesView() {
               <Table>
                 <TableHeader>
                   <TableRow className="bg-slate-50/50">
-                    <TableHead>Title</TableHead>
-                    <TableHead>Category</TableHead>
-                    <TableHead>Amount</TableHead>
-                    <TableHead className="hidden md:table-cell">Date</TableHead>
-                    <TableHead className="hidden md:table-cell">Payment</TableHead>
-                    <TableHead>Status</TableHead>
+                    <TableHead>{t("finance.colTitle")}</TableHead>
+                    <TableHead>{t("finance.colCategory")}</TableHead>
+                    <TableHead>{t("finance.colAmount")}</TableHead>
+                    <TableHead className="hidden md:table-cell">{t("finance.colDate")}</TableHead>
+                    <TableHead className="hidden md:table-cell">{t("finance.colPayment")}</TableHead>
+                    <TableHead>{t("finance.colStatus")}</TableHead>
                     <TableHead className="w-20" />
                   </TableRow>
                 </TableHeader>
@@ -319,7 +321,7 @@ export function ExpensesView() {
                             <p className="text-xs text-slate-400">{expense.employee.name}</p>
                           )}
                           {expense.isRecurring && (
-                            <span className="text-[10px] text-indigo-500 font-medium">Recurring</span>
+                            <span className="text-[10px] text-indigo-500 font-medium">{t("finance.recurring")}</span>
                           )}
                         </div>
                       </TableCell>
@@ -338,10 +340,10 @@ export function ExpensesView() {
                         </span>
                       </TableCell>
                       <TableCell className="hidden md:table-cell text-sm text-slate-500">
-                        {new Date(expense.date).toLocaleDateString()}
+                        {new Date(expense.date).toLocaleDateString(language === "bn" ? "bn-BD" : "en-US")}
                       </TableCell>
                       <TableCell className="hidden md:table-cell text-sm text-slate-500">
-                        {PAYMENT_LABELS[expense.paymentMethod as PaymentMethod]}
+                        {t(PAYMENT_LABEL_KEYS[expense.paymentMethod as PaymentMethod])}
                       </TableCell>
                       <TableCell>
                         <span
@@ -350,7 +352,7 @@ export function ExpensesView() {
                             STATUS_CONFIG[expense.status as ExpenseStatus].className,
                           )}
                         >
-                          {STATUS_CONFIG[expense.status as ExpenseStatus].label}
+                          {t(STATUS_CONFIG[expense.status as ExpenseStatus].labelKey)}
                         </span>
                       </TableCell>
                       <TableCell>
@@ -378,7 +380,7 @@ export function ExpensesView() {
               {(data?.pages ?? 0) > 1 && (
                 <div className="flex items-center justify-between px-6 py-3 border-t border-slate-100">
                   <p className="text-xs text-slate-500">
-                    {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, data?.total ?? 0)} of {data?.total}
+                    {t("finance.paginationRange", { from: (page - 1) * PAGE_SIZE + 1, to: Math.min(page * PAGE_SIZE, data?.total ?? 0), total: data?.total ?? 0 })}
                   </p>
                   <div className="flex gap-1">
                     <Button variant="outline" size="sm" disabled={page === 1} onClick={() => setPage(p => p - 1)}>
@@ -399,17 +401,17 @@ export function ExpensesView() {
       <Dialog open={expenseDialog !== null} onOpenChange={(o) => !o && setExpenseDialog(null)}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>{expenseDialog === "edit" ? "Edit Expense" : "Add Expense"}</DialogTitle>
+            <DialogTitle>{expenseDialog === "edit" ? t("finance.editExpense") : t("finance.addExpense")}</DialogTitle>
           </DialogHeader>
           <form onSubmit={expenseForm.handleSubmit(onSubmitExpense)} className="space-y-4 mt-2">
             <div className="space-y-1.5">
-              <Label>Title</Label>
-              <Input {...expenseForm.register("title", { required: true })} placeholder="e.g. Monthly Rent" />
+              <Label>{t("finance.fieldTitle")}</Label>
+              <Input {...expenseForm.register("title", { required: true })} placeholder={t("finance.titlePlaceholder")} />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label>Amount</Label>
+                <Label>{t("finance.fieldAmount")}</Label>
                 <Input
                   type="number"
                   step="0.01"
@@ -418,19 +420,19 @@ export function ExpensesView() {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label>Date</Label>
+                <Label>{t("finance.fieldDate")}</Label>
                 <Input type="date" {...expenseForm.register("date", { required: true })} />
               </div>
             </div>
 
             <div className="space-y-1.5">
-              <Label>Category</Label>
+              <Label>{t("finance.fieldCategory")}</Label>
               <Select
                 value={expenseForm.watch("categoryId")}
                 onValueChange={(v) => expenseForm.setValue("categoryId", v)}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Select category" />
+                  <SelectValue placeholder={t("finance.selectCategory")} />
                 </SelectTrigger>
                 <SelectContent>
                   {categories?.map((c) => (
@@ -442,7 +444,7 @@ export function ExpensesView() {
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label>Payment Method</Label>
+                <Label>{t("finance.fieldPaymentMethod")}</Label>
                 <Select
                   value={expenseForm.watch("paymentMethod")}
                   onValueChange={(v) => expenseForm.setValue("paymentMethod", v as PaymentMethod)}
@@ -451,15 +453,15 @@ export function ExpensesView() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="CASH">Cash</SelectItem>
-                    <SelectItem value="CARD">Card</SelectItem>
-                    <SelectItem value="MOBILE_MONEY">Mobile Money</SelectItem>
-                    <SelectItem value="BANK_TRANSFER">Bank Transfer</SelectItem>
+                    <SelectItem value="CASH">{t("sales.payCash")}</SelectItem>
+                    <SelectItem value="CARD">{t("sales.payCard")}</SelectItem>
+                    <SelectItem value="MOBILE_MONEY">{t("sales.payMobile")}</SelectItem>
+                    <SelectItem value="BANK_TRANSFER">{t("sales.payBankTransfer")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label>Status</Label>
+                <Label>{t("finance.fieldStatus")}</Label>
                 <Select
                   value={expenseForm.watch("status")}
                   onValueChange={(v) => expenseForm.setValue("status", v as ExpenseStatus)}
@@ -468,9 +470,9 @@ export function ExpensesView() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="PAID">Paid</SelectItem>
-                    <SelectItem value="PENDING">Pending</SelectItem>
-                    <SelectItem value="CANCELLED">Cancelled</SelectItem>
+                    <SelectItem value="PAID">{t("finance.statusPaid")}</SelectItem>
+                    <SelectItem value="PENDING">{t("finance.statusPending")}</SelectItem>
+                    <SelectItem value="CANCELLED">{t("finance.statusCancelled")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -478,16 +480,16 @@ export function ExpensesView() {
 
             {(employees?.items.length ?? 0) > 0 && (
               <div className="space-y-1.5">
-                <Label>Employee (optional)</Label>
+                <Label>{t("finance.employeeOptional")}</Label>
                 <Select
                   value={expenseForm.watch("employeeId") ?? "none"}
                   onValueChange={(v) => expenseForm.setValue("employeeId", v === "none" ? undefined : v)}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="None" />
+                    <SelectValue placeholder={t("finance.none")} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="none">None</SelectItem>
+                    <SelectItem value="none">{t("finance.none")}</SelectItem>
                     {employees?.items.filter(e => e.isActive).map((e) => (
                       <SelectItem key={e.id} value={e.id}>{e.name} — {e.position}</SelectItem>
                     ))}
@@ -497,8 +499,8 @@ export function ExpensesView() {
             )}
 
             <div className="space-y-1.5">
-              <Label>Notes (optional)</Label>
-              <Input {...expenseForm.register("notes")} placeholder="Additional details…" />
+              <Label>{t("finance.notesOptional")}</Label>
+              <Input {...expenseForm.register("notes")} placeholder={t("finance.notesPlaceholder")} />
             </div>
 
             <div className="flex items-center gap-2">
@@ -509,19 +511,19 @@ export function ExpensesView() {
                 className="rounded border-slate-300"
               />
               <Label htmlFor="recurring" className="font-normal cursor-pointer">
-                Recurring expense
+                {t("finance.recurringExpense")}
               </Label>
             </div>
 
             <div className="flex justify-end gap-2 pt-1">
               <Button type="button" variant="outline" onClick={() => setExpenseDialog(null)}>
-                Cancel
+                {t("common.cancel")}
               </Button>
               <Button
                 type="submit"
                 disabled={createMutation.isPending || updateMutation.isPending}
               >
-                {expenseDialog === "edit" ? "Save Changes" : "Add Expense"}
+                {expenseDialog === "edit" ? t("common.saveChanges") : t("finance.addExpense")}
               </Button>
             </div>
           </form>
@@ -532,19 +534,19 @@ export function ExpensesView() {
       <Dialog open={!!deleteConfirm} onOpenChange={(o) => !o && setDeleteConfirm(null)}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Delete Expense</DialogTitle>
+            <DialogTitle>{t("finance.deleteExpense")}</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-slate-600">
-            This expense will be permanently deleted. This cannot be undone.
+            {t("finance.deleteExpenseDesc")}
           </p>
           <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setDeleteConfirm(null)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setDeleteConfirm(null)}>{t("common.cancel")}</Button>
             <Button
               variant="destructive"
               disabled={deleteMutation.isPending}
               onClick={() => deleteConfirm && deleteMutation.mutate({ id: deleteConfirm })}
             >
-              Delete
+              {t("common.delete")}
             </Button>
           </div>
         </DialogContent>
@@ -560,16 +562,17 @@ export function ExpensesView() {
 
 function CategoryDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
   const { toast } = useToast();
+  const { t } = useTranslation();
   const utils = trpc.useUtils();
   const { data: categories } = trpc.finance.expenseCategories.list.useQuery();
 
   const createCat = trpc.finance.expenseCategories.create.useMutation({
-    onSuccess: () => { utils.finance.expenseCategories.list.invalidate(); catForm.reset({ name: "", color: "#6366f1" }); toast({ title: "Category created" }); },
+    onSuccess: () => { utils.finance.expenseCategories.list.invalidate(); catForm.reset({ name: "", color: "#6366f1" }); toast({ title: t("finance.categoryCreated") }); },
     onError: (e) => toast({ title: e.message, variant: "destructive" }),
   });
 
   const deleteCat = trpc.finance.expenseCategories.delete.useMutation({
-    onSuccess: () => { utils.finance.expenseCategories.list.invalidate(); toast({ title: "Category deleted" }); },
+    onSuccess: () => { utils.finance.expenseCategories.list.invalidate(); toast({ title: t("finance.categoryDeleted") }); },
     onError: (e) => toast({ title: e.message, variant: "destructive" }),
   });
 
@@ -579,13 +582,13 @@ function CategoryDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Manage Categories</DialogTitle>
+          <DialogTitle>{t("finance.manageCategories")}</DialogTitle>
         </DialogHeader>
 
         {/* Existing categories */}
         <div className="space-y-1.5 max-h-48 overflow-y-auto">
           {(categories?.length ?? 0) === 0 ? (
-            <p className="text-sm text-slate-400 text-center py-4">No categories yet</p>
+            <p className="text-sm text-slate-400 text-center py-4">{t("finance.noCategories")}</p>
           ) : (
             categories?.map((cat) => (
               <div key={cat.id} className="flex items-center justify-between px-3 py-2 rounded-lg bg-slate-50">
@@ -603,7 +606,7 @@ function CategoryDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (
                       ? "hover:text-red-500 hover:bg-red-50"
                       : "opacity-30 cursor-not-allowed",
                   )}
-                  title={cat._count.expenses > 0 ? "In use — cannot delete" : "Delete"}
+                  title={cat._count.expenses > 0 ? t("finance.inUseCannotDelete") : t("common.delete")}
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
@@ -618,7 +621,7 @@ function CategoryDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (
           className="flex gap-2 pt-2 border-t border-slate-100"
         >
           <div className="flex items-center gap-1.5">
-            <label className="text-xs text-slate-500">Color</label>
+            <label className="text-xs text-slate-500">{t("finance.colorLabel")}</label>
             <input
               type="color"
               {...catForm.register("color")}
@@ -627,7 +630,7 @@ function CategoryDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (
           </div>
           <Input
             {...catForm.register("name", { required: true })}
-            placeholder="Category name"
+            placeholder={t("finance.categoryNamePlaceholder")}
             className="flex-1 h-9"
           />
           <Button type="submit" size="sm" disabled={createCat.isPending}>

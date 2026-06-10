@@ -1,6 +1,8 @@
 "use client";
 import { trpc } from "@/lib/trpc/client";
 import { useFormatCurrency } from "@/lib/currency-context";
+import { useTranslation } from "@/lib/i18n/language-context";
+import type { Language } from "@/lib/i18n/translations";
 import {
   ShoppingCart,
   DollarSign,
@@ -30,15 +32,15 @@ import Link from "next/link";
 
 const CATEGORY_COLORS = ["#6366f1", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4"];
 
-function getGreeting() {
+function getGreetingKey() {
   const h = new Date().getHours();
-  if (h < 12) return "Good morning";
-  if (h < 17) return "Good afternoon";
-  return "Good evening";
+  if (h < 12) return "dashboard.goodMorning" as const;
+  if (h < 17) return "dashboard.goodAfternoon" as const;
+  return "dashboard.goodEvening" as const;
 }
 
-function getTodayLabel() {
-  return new Intl.DateTimeFormat("en-US", {
+function getTodayLabel(language: Language) {
+  return new Intl.DateTimeFormat(language === "bn" ? "bn-BD" : "en-US", {
     weekday: "long",
     month: "long",
     day: "numeric",
@@ -93,6 +95,7 @@ function ChartTooltip({ active, payload, label }: {
 
 export function DashboardOverview({ user }: { user: AuthUser }) {
   const formatCurrency = useFormatCurrency();
+  const { t, language } = useTranslation();
   const { data: overview, isLoading: overviewLoading } = trpc.analytics.overview.useQuery();
   const { data: salesChart } = trpc.analytics.salesChart.useQuery();
   const { data: topProducts } = trpc.analytics.topProducts.useQuery();
@@ -101,39 +104,38 @@ export function DashboardOverview({ user }: { user: AuthUser }) {
   const chartData = (salesChart ?? []).slice(-14);
   const maxRevenue = Math.max(...(topProducts ?? []).map((p) => p.totalRevenue), 1);
   const firstName = user.name.split(" ")[0];
-  console.log("Formate C  urrency", formatCurrency(200));
 
   const stats = [
     {
-      label: "Revenue",
+      label: t("dashboard.revenue"),
       value: formatCurrency(overview?.totalRevenue ?? 0),
-      sub: `Last 30 days · ${overview?.fulfilledOrders ?? 0} fulfilled`,
+      sub: t("dashboard.fulfilledCount", { count: overview?.fulfilledOrders ?? 0 }),
       icon: DollarSign,
       iconColor: "text-emerald-600",
       iconBg: "bg-emerald-50",
     },
     {
-      label: "Orders",
+      label: t("dashboard.orders"),
       value: String(overview?.totalOrders ?? 0),
-      sub: "Last 30 days",
+      sub: t("dashboard.last30Days"),
       icon: ShoppingCart,
       iconColor: "text-indigo-600",
       iconBg: "bg-indigo-50",
     },
     {
-      label: "Products",
+      label: t("dashboard.products"),
       value: String(overview?.totalProducts ?? 0),
       sub: overview?.lowStockCount
-        ? `${overview.lowStockCount} running low`
-        : "All stocked",
+        ? t("dashboard.runningLow", { count: overview.lowStockCount })
+        : t("dashboard.allStocked"),
       icon: Package,
       iconColor: "text-blue-600",
       iconBg: "bg-blue-50",
     },
     {
-      label: "Customers",
+      label: t("dashboard.customers"),
       value: String(overview?.totalCustomers ?? 0),
-      sub: "Total registered",
+      sub: t("dashboard.totalRegistered"),
       icon: Users,
       iconColor: "text-amber-600",
       iconBg: "bg-amber-50",
@@ -147,16 +149,16 @@ export function DashboardOverview({ user }: { user: AuthUser }) {
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">
-            {getGreeting()}, {firstName}
+            {t(getGreetingKey())}, {firstName}
           </h1>
-          <p className="text-sm text-slate-400 mt-0.5">{getTodayLabel()}</p>
+          <p className="text-sm text-slate-400 mt-0.5">{getTodayLabel(language)}</p>
         </div>
         <Link
           href="/sales"
           className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors duration-150 shrink-0 shadow-sm shadow-indigo-200"
         >
           <Plus className="h-4 w-4" />
-          New Sale
+          {t("dashboard.newSale")}
         </Link>
       </div>
 
@@ -169,8 +171,12 @@ export function DashboardOverview({ user }: { user: AuthUser }) {
           <div className="flex items-center gap-3">
             <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
             <p className="text-sm text-amber-800">
-              <span className="font-semibold">{overview!.lowStockCount} product variant{overview!.lowStockCount > 1 ? "s are" : " is"} running low</span>
-              {" "}— restock soon to avoid lost sales.
+              <span className="font-semibold">
+                {overview!.lowStockCount > 1
+                  ? t("dashboard.lowStockWarningPlural", { count: overview!.lowStockCount })
+                  : t("dashboard.lowStockWarning", { count: overview!.lowStockCount })}
+              </span>
+              {" "}{t("dashboard.restockSoon")}
             </p>
           </div>
           <ArrowRight className="h-4 w-4 text-amber-600 shrink-0 group-hover:translate-x-0.5 transition-transform" />
@@ -191,12 +197,12 @@ export function DashboardOverview({ user }: { user: AuthUser }) {
         <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
           <div className="flex items-center justify-between mb-5">
             <div>
-              <h2 className="text-sm font-semibold text-slate-900">Revenue Trend</h2>
-              <p className="text-xs text-slate-400 mt-0.5">Last 14 days</p>
+              <h2 className="text-sm font-semibold text-slate-900">{t("dashboard.revenueTrend")}</h2>
+              <p className="text-xs text-slate-400 mt-0.5">{t("dashboard.last14Days")}</p>
             </div>
             <span className="flex items-center gap-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-100 px-2.5 py-1 rounded-full">
               <TrendingUp className="h-3 w-3" />
-              Revenue
+              {t("dashboard.revenue")}
             </span>
           </div>
           <ResponsiveContainer width="100%" height={210}>
@@ -239,16 +245,16 @@ export function DashboardOverview({ user }: { user: AuthUser }) {
         {/* Category donut */}
         <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
           <div className="mb-4">
-            <h2 className="text-sm font-semibold text-slate-900">By Category</h2>
-            <p className="text-xs text-slate-400 mt-0.5">Revenue split</p>
+            <h2 className="text-sm font-semibold text-slate-900">{t("dashboard.byCategory")}</h2>
+            <p className="text-xs text-slate-400 mt-0.5">{t("dashboard.revenueSplit")}</p>
           </div>
           {(revenueByCategory ?? []).length === 0 ? (
             <div className="flex flex-col items-center justify-center h-[210px] text-center">
               <div className="w-12 h-12 rounded-full bg-slate-50 flex items-center justify-center mb-3">
                 <Package className="h-5 w-5 text-slate-300" />
               </div>
-              <p className="text-sm font-medium text-slate-400">No data yet</p>
-              <p className="text-xs text-slate-300 mt-1">Sales will appear here</p>
+              <p className="text-sm font-medium text-slate-400">{t("common.noData")}</p>
+              <p className="text-xs text-slate-300 mt-1">{t("dashboard.salesWillAppear")}</p>
             </div>
           ) : (
             <ResponsiveContainer width="100%" height={210}>
@@ -295,14 +301,14 @@ export function DashboardOverview({ user }: { user: AuthUser }) {
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
         <div className="flex items-center justify-between mb-5">
           <div>
-            <h2 className="text-sm font-semibold text-slate-900">Top Products</h2>
-            <p className="text-xs text-slate-400 mt-0.5">Best sellers this month</p>
+            <h2 className="text-sm font-semibold text-slate-900">{t("dashboard.topProducts")}</h2>
+            <p className="text-xs text-slate-400 mt-0.5">{t("dashboard.bestSellers")}</p>
           </div>
           <Link
             href="/analytics"
             className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 flex items-center gap-1 group"
           >
-            View all
+            {t("common.viewAll")}
             <ArrowRight className="h-3 w-3 group-hover:translate-x-0.5 transition-transform" />
           </Link>
         </div>
@@ -312,13 +318,13 @@ export function DashboardOverview({ user }: { user: AuthUser }) {
             <div className="w-12 h-12 rounded-full bg-slate-50 flex items-center justify-center mb-3">
               <Receipt className="h-5 w-5 text-slate-300" />
             </div>
-            <p className="text-sm font-medium text-slate-400">No sales yet</p>
+            <p className="text-sm font-medium text-slate-400">{t("dashboard.noSalesYet")}</p>
             <Link
               href="/sales"
               className="text-xs text-indigo-600 font-semibold mt-2 hover:underline inline-flex items-center gap-1"
             >
               <Plus className="h-3 w-3" />
-              Make your first sale
+              {t("dashboard.makeFirstSale")}
             </Link>
           </div>
         ) : (
@@ -346,7 +352,7 @@ export function DashboardOverview({ user }: { user: AuthUser }) {
                         />
                       </div>
                       <span className="text-xs text-slate-400 shrink-0 w-14 text-right">
-                        {p.totalQty} units
+                        {p.totalQty} {t("common.units")}
                       </span>
                     </div>
                   </div>

@@ -75,6 +75,7 @@ model Shop {
   phone       String?
   email       String?
   currency    String   @default("USD")
+  language    String   @default("en")
   taxRate     Float    @default(0)
   taxName     String   @default("Tax")
   createdAt   DateTime @default(now())

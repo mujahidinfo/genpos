@@ -6,6 +6,7 @@ import { trpc } from "@/lib/trpc/client";
 import { useFormatCurrency } from "@/lib/currency-context";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import { useTranslation, type TranslationKey } from "@/lib/i18n/language-context";
 import { FinanceNav } from "@/components/finance/finance-nav";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -43,8 +44,8 @@ interface EmployeeForm {
   notes: string;
 }
 
-const SALARY_LABELS: Record<SalaryType, string> = {
-  MONTHLY: "Monthly", HOURLY: "Hourly", WEEKLY: "Weekly", ANNUALLY: "Annually",
+const SALARY_LABEL_KEYS: Record<SalaryType, TranslationKey> = {
+  MONTHLY: "finance.salaryMonthly", HOURLY: "finance.salaryHourly", WEEKLY: "finance.salaryWeekly", ANNUALLY: "finance.salaryAnnually",
 };
 
 function toMonthlySalary(salary: number, type: SalaryType): number {
@@ -61,6 +62,7 @@ function toMonthlySalary(salary: number, type: SalaryType): number {
 export function EmployeesView() {
   const { toast } = useToast();
   const formatCurrency = useFormatCurrency();
+  const { t, language } = useTranslation();
   const utils = trpc.useUtils();
 
   const [dialog, setDialog] = useState<"add" | "edit" | null>(null);
@@ -73,7 +75,7 @@ export function EmployeesView() {
     onSuccess: () => {
       utils.finance.employees.list.invalidate();
       setDialog(null);
-      toast({ title: "Employee added" });
+      toast({ title: t("finance.employeeAdded") });
     },
     onError: (e) => toast({ title: e.message, variant: "destructive" }),
   });
@@ -83,7 +85,7 @@ export function EmployeesView() {
       utils.finance.employees.list.invalidate();
       utils.finance.overview.invalidate();
       setDialog(null);
-      toast({ title: "Employee updated" });
+      toast({ title: t("finance.employeeUpdated") });
     },
     onError: (e) => toast({ title: e.message, variant: "destructive" }),
   });
@@ -152,12 +154,12 @@ export function EmployeesView() {
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Finance</h1>
-          <p className="text-sm text-slate-500 mt-0.5">Employee salary management</p>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">{t("finance.title")}</h1>
+          <p className="text-sm text-slate-500 mt-0.5">{t("finance.employeesSubtitle")}</p>
         </div>
         <Button size="sm" onClick={openAdd}>
           <Plus className="h-4 w-4 mr-1.5" />
-          Add Employee
+          {t("finance.addEmployee")}
         </Button>
       </div>
 
@@ -169,9 +171,9 @@ export function EmployeesView() {
           <CardContent className="pt-5 pb-4">
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Active Staff</p>
+                <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">{t("finance.activeStaff")}</p>
                 <p className="text-2xl font-bold text-slate-900 mt-1">{activeEmployees.length}</p>
-                <p className="text-xs text-slate-400 mt-0.5">{inactiveEmployees.length} inactive</p>
+                <p className="text-xs text-slate-400 mt-0.5">{t("finance.inactiveCount", { count: inactiveEmployees.length })}</p>
               </div>
               <div className="p-2.5 rounded-xl bg-indigo-50">
                 <Users className="h-5 w-5 text-indigo-600" />
@@ -184,11 +186,11 @@ export function EmployeesView() {
           <CardContent className="pt-5 pb-4">
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Monthly Payroll</p>
+                <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">{t("finance.monthlyPayroll")}</p>
                 <p className="text-2xl font-bold text-slate-900 mt-1">
                   {isLoading ? "—" : formatCurrency(data?.totalMonthlySalary ?? 0)}
                 </p>
-                <p className="text-xs text-slate-400 mt-0.5">Estimated total</p>
+                <p className="text-xs text-slate-400 mt-0.5">{t("finance.estimatedTotal")}</p>
               </div>
               <div className="p-2.5 rounded-xl bg-emerald-50">
                 <DollarSign className="h-5 w-5 text-emerald-600" />
@@ -201,13 +203,13 @@ export function EmployeesView() {
           <CardContent className="pt-5 pb-4">
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Avg. Salary</p>
+                <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">{t("finance.avgSalary")}</p>
                 <p className="text-2xl font-bold text-slate-900 mt-1">
                   {isLoading || activeEmployees.length === 0
                     ? "—"
                     : formatCurrency((data?.totalMonthlySalary ?? 0) / activeEmployees.length)}
                 </p>
-                <p className="text-xs text-slate-400 mt-0.5">Per employee / month</p>
+                <p className="text-xs text-slate-400 mt-0.5">{t("finance.perEmployeeMonth")}</p>
               </div>
               <div className="p-2.5 rounded-xl bg-amber-50">
                 <Briefcase className="h-5 w-5 text-amber-600" />
@@ -223,7 +225,7 @@ export function EmployeesView() {
           onClick={() => setShowInactive((v) => !v)}
           className="text-sm text-indigo-600 hover:underline"
         >
-          {showInactive ? "Hide inactive employees" : `Show ${inactiveEmployees.length} inactive employee(s)`}
+          {showInactive ? t("finance.hideInactive") : t("finance.showInactive", { count: inactiveEmployees.length })}
         </button>
       )}
 
@@ -235,8 +237,8 @@ export function EmployeesView() {
       ) : displayed.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-slate-400">
           <Users className="h-10 w-10 mb-3 opacity-30" />
-          <p className="text-sm font-medium">No employees yet</p>
-          <p className="text-xs mt-1">Add your first employee to track salaries</p>
+          <p className="text-sm font-medium">{t("finance.noEmployees")}</p>
+          <p className="text-xs mt-1">{t("finance.addFirstEmployee")}</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -270,7 +272,7 @@ export function EmployeesView() {
                             ? "hover:bg-red-50 text-slate-400 hover:text-red-600"
                             : "hover:bg-emerald-50 text-slate-400 hover:text-emerald-600",
                         )}
-                        title={emp.isActive ? "Deactivate" : "Reactivate"}
+                        title={emp.isActive ? t("finance.deactivate") : t("finance.reactivate")}
                       >
                         {emp.isActive ? <UserX className="h-3.5 w-3.5" /> : <UserCheck className="h-3.5 w-3.5" />}
                       </button>
@@ -284,32 +286,32 @@ export function EmployeesView() {
 
                   <div className="mt-3 pt-3 border-t border-slate-100 space-y-1.5">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs text-slate-400">Salary</span>
+                      <span className="text-xs text-slate-400">{t("finance.salaryLabel")}</span>
                       <span className="text-xs font-semibold text-slate-700">
-                        {formatCurrency(emp.salary)} / {SALARY_LABELS[emp.salaryType as SalaryType].toLowerCase()}
+                        {t("finance.salaryPer", { amount: formatCurrency(emp.salary), unit: t(SALARY_LABEL_KEYS[emp.salaryType as SalaryType]) })}
                       </span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-xs text-slate-400">Monthly est.</span>
+                      <span className="text-xs text-slate-400">{t("finance.monthlyEst")}</span>
                       <span className="text-sm font-bold text-slate-900">{formatCurrency(monthly)}</span>
                     </div>
                     {emp.email && (
                       <div className="flex items-center justify-between">
-                        <span className="text-xs text-slate-400">Email</span>
+                        <span className="text-xs text-slate-400">{t("finance.emailLabel")}</span>
                         <span className="text-xs text-slate-600 truncate max-w-[140px]">{emp.email}</span>
                       </div>
                     )}
                     <div className="flex items-center justify-between">
-                      <span className="text-xs text-slate-400">Joined</span>
+                      <span className="text-xs text-slate-400">{t("finance.joinedLabel")}</span>
                       <span className="text-xs text-slate-600">
-                        {new Date(emp.joinDate).toLocaleDateString()}
+                        {new Date(emp.joinDate).toLocaleDateString(language === "bn" ? "bn-BD" : "en-US")}
                       </span>
                     </div>
                   </div>
 
                   {!emp.isActive && (
                     <div className="mt-2 px-2 py-1 bg-slate-100 rounded text-center">
-                      <span className="text-xs text-slate-500 font-medium">Inactive</span>
+                      <span className="text-xs text-slate-500 font-medium">{t("finance.inactive")}</span>
                     </div>
                   )}
                 </CardContent>
@@ -323,22 +325,22 @@ export function EmployeesView() {
       <Dialog open={dialog !== null} onOpenChange={(o) => !o && setDialog(null)}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>{dialog === "edit" ? "Edit Employee" : "Add Employee"}</DialogTitle>
+            <DialogTitle>{dialog === "edit" ? t("finance.editEmployee") : t("finance.addEmployee")}</DialogTitle>
           </DialogHeader>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 mt-2">
             <div className="space-y-1.5">
-              <Label>Full Name</Label>
+              <Label>{t("finance.fullName")}</Label>
               <Input {...form.register("name", { required: true })} placeholder="John Doe" />
             </div>
 
             <div className="space-y-1.5">
-              <Label>Position / Role</Label>
-              <Input {...form.register("position", { required: true })} placeholder="e.g. Store Manager" />
+              <Label>{t("finance.positionRole")}</Label>
+              <Input {...form.register("position", { required: true })} placeholder={t("finance.positionPlaceholder")} />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label>Salary</Label>
+                <Label>{t("finance.salaryField")}</Label>
                 <Input
                   type="number"
                   step="0.01"
@@ -347,7 +349,7 @@ export function EmployeesView() {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label>Salary Type</Label>
+                <Label>{t("finance.salaryType")}</Label>
                 <Select
                   value={form.watch("salaryType")}
                   onValueChange={(v) => form.setValue("salaryType", v as SalaryType)}
@@ -356,45 +358,45 @@ export function EmployeesView() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="MONTHLY">Monthly</SelectItem>
-                    <SelectItem value="HOURLY">Hourly</SelectItem>
-                    <SelectItem value="WEEKLY">Weekly</SelectItem>
-                    <SelectItem value="ANNUALLY">Annually</SelectItem>
+                    <SelectItem value="MONTHLY">{t("finance.salaryMonthly")}</SelectItem>
+                    <SelectItem value="HOURLY">{t("finance.salaryHourly")}</SelectItem>
+                    <SelectItem value="WEEKLY">{t("finance.salaryWeekly")}</SelectItem>
+                    <SelectItem value="ANNUALLY">{t("finance.salaryAnnually")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </div>
 
             <div className="space-y-1.5">
-              <Label>Join Date</Label>
+              <Label>{t("finance.joinDate")}</Label>
               <Input type="date" {...form.register("joinDate", { required: true })} />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label>Email (optional)</Label>
+                <Label>{t("finance.emailOptional")}</Label>
                 <Input {...form.register("email")} type="email" placeholder="john@example.com" />
               </div>
               <div className="space-y-1.5">
-                <Label>Phone (optional)</Label>
+                <Label>{t("finance.phoneOptional")}</Label>
                 <Input {...form.register("phone")} placeholder="+1 234 567 890" />
               </div>
             </div>
 
             <div className="space-y-1.5">
-              <Label>Notes (optional)</Label>
-              <Input {...form.register("notes")} placeholder="Additional notes…" />
+              <Label>{t("finance.notesOptional")}</Label>
+              <Input {...form.register("notes")} placeholder={t("finance.notesPlaceholderEmp")} />
             </div>
 
             <div className="flex justify-end gap-2 pt-1">
               <Button type="button" variant="outline" onClick={() => setDialog(null)}>
-                Cancel
+                {t("common.cancel")}
               </Button>
               <Button
                 type="submit"
                 disabled={createMutation.isPending || updateMutation.isPending}
               >
-                {dialog === "edit" ? "Save Changes" : "Add Employee"}
+                {dialog === "edit" ? t("common.saveChanges") : t("finance.addEmployee")}
               </Button>
             </div>
           </form>

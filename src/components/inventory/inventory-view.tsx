@@ -4,6 +4,8 @@ import { useState } from "react";
 import { trpc } from "@/lib/trpc/client";
 import { cn } from "@/lib/utils";
 import { useFormatCurrency } from "@/lib/currency-context";
+import { useTranslation, type TranslationKey } from "@/lib/i18n/language-context";
+import type { Language } from "@/lib/i18n/translations";
 import {
   Search, X, Plus, AlertTriangle, Package, ArrowUpCircle, ArrowDownCircle,
   RotateCcw, RefreshCw, ChevronLeft, ChevronRight, Pencil, Trash2,
@@ -31,21 +33,21 @@ const PAGE_SIZE = 16;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-const MOVE_CONFIG: Record<MoveType, { label: string; color: string; Icon: React.ElementType }> = {
-  IN:         { label: "Stock In",    color: "text-emerald-600 bg-emerald-50", Icon: ArrowUpCircle   },
-  OUT:        { label: "Stock Out",   color: "text-red-500 bg-red-50",         Icon: ArrowDownCircle },
-  ADJUSTMENT: { label: "Adjustment",  color: "text-blue-600 bg-blue-50",       Icon: RefreshCw       },
-  RETURN:     { label: "Return",      color: "text-violet-600 bg-violet-50",   Icon: RotateCcw       },
+const MOVE_CONFIG: Record<MoveType, { labelKey: TranslationKey; shortKey: TranslationKey; color: string; Icon: React.ElementType }> = {
+  IN:         { labelKey: "inventory.moveIn",         shortKey: "inventory.moveInShort",     color: "text-emerald-600 bg-emerald-50", Icon: ArrowUpCircle   },
+  OUT:        { labelKey: "inventory.moveOut",        shortKey: "inventory.moveOutShort",    color: "text-red-500 bg-red-50",         Icon: ArrowDownCircle },
+  ADJUSTMENT: { labelKey: "inventory.moveAdjustment", shortKey: "inventory.moveSet",         color: "text-blue-600 bg-blue-50",       Icon: RefreshCw       },
+  RETURN:     { labelKey: "inventory.moveReturn",     shortKey: "inventory.moveReturnShort", color: "text-violet-600 bg-violet-50",   Icon: RotateCcw       },
 };
 
 function stockStatus(stock: number, lowStock: number) {
-  if (stock === 0)        return { label: "Out",      pill: "bg-red-50 text-red-500 border-red-200 border",      bar: "bg-red-400"     } as const;
-  if (stock <= lowStock)  return { label: "Low",      pill: "bg-amber-50 text-amber-700 border-amber-200 border", bar: "bg-amber-400"   } as const;
-  return                         { label: "In Stock", pill: "bg-emerald-50 text-emerald-700 border-emerald-200 border", bar: "bg-emerald-500" } as const;
+  if (stock === 0)        return { labelKey: "inventory.statusOut" as TranslationKey,     pill: "bg-red-50 text-red-500 border-red-200 border",      bar: "bg-red-400"     } as const;
+  if (stock <= lowStock)  return { labelKey: "inventory.statusLow" as TranslationKey,     pill: "bg-amber-50 text-amber-700 border-amber-200 border", bar: "bg-amber-400"   } as const;
+  return                         { labelKey: "inventory.statusInStock" as TranslationKey, pill: "bg-emerald-50 text-emerald-700 border-emerald-200 border", bar: "bg-emerald-500" } as const;
 }
 
-function formatDate(date: Date | string) {
-  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(date));
+function formatDate(date: Date | string, language: Language) {
+  return new Intl.DateTimeFormat(language === "bn" ? "bn-BD" : "en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(date));
 }
 
 // ─── Product Detail Slide-over ────────────────────────────────────────────────
@@ -58,6 +60,7 @@ function ProductDetailPanel({ productId, onClose, onEdit }: {
   const { toast } = useToast();
   const utils = trpc.useUtils();
   const formatCurrency = useFormatCurrency();
+  const { t, language } = useTranslation();
 
   const { data: product, isLoading } = trpc.products.getById.useQuery({ id: productId });
 
@@ -75,18 +78,18 @@ function ProductDetailPanel({ productId, onClose, onEdit }: {
       utils.products.getById.invalidate({ id: productId });
       setAdjQty("");
       setAdjNote("");
-      toast({ title: `Stock updated → ${data.stock} units` });
+      toast({ title: t("inventory.stockUpdated", { stock: data.stock }) });
     },
-    onError: (e) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e) => toast({ title: t("common.error"), description: e.message, variant: "destructive" }),
   });
 
   const deleteProduct = trpc.products.delete.useMutation({
     onSuccess: () => {
       utils.products.list.invalidate();
       onClose();
-      toast({ title: "Product archived" });
+      toast({ title: t("inventory.productArchived") });
     },
-    onError: (e) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e) => toast({ title: t("common.error"), description: e.message, variant: "destructive" }),
   });
 
   const handleAdjust = () => {
@@ -131,7 +134,7 @@ function ProductDetailPanel({ productId, onClose, onEdit }: {
           {product.category && <p className="text-xs text-slate-400">{product.category.name}</p>}
         </div>
         <span className={cn("text-[11px] font-bold px-2.5 py-1 rounded-full", st.pill)}>
-          {st.label}
+          {t(st.labelKey)}
         </span>
       </div>
 
@@ -140,29 +143,29 @@ function ProductDetailPanel({ productId, onClose, onEdit }: {
         {/* Product info grid */}
         <div className="grid grid-cols-2 gap-3">
           <div className="bg-slate-50 rounded-xl p-3">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Price</p>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">{t("inventory.price")}</p>
             <p className="text-sm font-black text-slate-900">{formatCurrency(product.price)}</p>
           </div>
           <div className="bg-slate-50 rounded-xl p-3">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Cost</p>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">{t("inventory.cost")}</p>
             <p className="text-sm font-semibold text-slate-700">{formatCurrency(product.costPrice)}</p>
           </div>
           {product.sku && (
             <div className="bg-slate-50 rounded-xl p-3">
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">SKU</p>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">{t("inventory.sku")}</p>
               <p className="text-sm font-mono font-semibold text-slate-800">{product.sku}</p>
             </div>
           )}
           {product.barcode && (
             <div className="bg-slate-50 rounded-xl p-3">
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Barcode</p>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">{t("inventory.barcode")}</p>
               <p className="text-sm font-mono font-semibold text-slate-800 truncate">{product.barcode}</p>
             </div>
           )}
           <div className="bg-slate-50 rounded-xl p-3 col-span-2">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Total Stock</p>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">{t("inventory.totalStock")}</p>
             <div className="flex items-center gap-2">
-              <p className="text-sm font-black text-slate-900">{totalStock} units</p>
+              <p className="text-sm font-black text-slate-900">{totalStock} {t("inventory.units")}</p>
               {isLow && <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />}
             </div>
           </div>
@@ -175,7 +178,7 @@ function ProductDetailPanel({ productId, onClose, onEdit }: {
         {/* Variants */}
         <div>
           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">
-            Variants ({product.variants.length})
+            {t("inventory.variants", { count: product.variants.length })}
           </p>
           <div className="space-y-2">
             {product.variants.map((v) => {
@@ -196,7 +199,7 @@ function ProductDetailPanel({ productId, onClose, onEdit }: {
 
         {/* Stock adjustment */}
         <div>
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Adjust Stock</p>
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">{t("inventory.adjustStock")}</p>
           <div className="bg-slate-50 rounded-xl p-4 space-y-3">
             {/* Variant select (only if multiple) */}
             {product.variants.length > 1 && (
@@ -206,38 +209,38 @@ function ProductDetailPanel({ productId, onClose, onEdit }: {
                 className="w-full h-9 px-3 bg-white border border-slate-200 rounded-xl text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
               >
                 {product.variants.map((v) => (
-                  <option key={v.id} value={v.id}>{v.name} (stock: {v.stock})</option>
+                  <option key={v.id} value={v.id}>{t("inventory.variantStock", { name: v.name, stock: v.stock })}</option>
                 ))}
               </select>
             )}
 
             {/* Movement type */}
             <div className="grid grid-cols-4 gap-1.5">
-              {(["IN", "OUT", "ADJUSTMENT", "RETURN"] as MoveType[]).map((t) => {
-                const cfg = MOVE_CONFIG[t];
+              {(["IN", "OUT", "ADJUSTMENT", "RETURN"] as MoveType[]).map((mt) => {
+                const cfg = MOVE_CONFIG[mt];
                 return (
                   <button
-                    key={t}
-                    onClick={() => setAdjType(t)}
+                    key={mt}
+                    onClick={() => setAdjType(mt)}
                     className={cn(
                       "flex flex-col items-center gap-1 py-2 rounded-xl text-[10px] font-bold border transition-all",
-                      adjType === t
+                      adjType === mt
                         ? `${cfg.color} border-current`
                         : "bg-white border-slate-200 text-slate-500 hover:border-slate-300"
                     )}
                   >
                     <cfg.Icon className="h-3.5 w-3.5" />
-                    {t === "ADJUSTMENT" ? "Set" : cfg.label.split(" ")[1] ?? cfg.label}
+                    {t(cfg.shortKey)}
                   </button>
                 );
               })}
             </div>
 
             <p className="text-[11px] text-slate-500">
-              {adjType === "IN"         && "Add units to stock."}
-              {adjType === "OUT"        && "Remove units from stock."}
-              {adjType === "ADJUSTMENT" && "Set the exact stock count."}
-              {adjType === "RETURN"     && "Add returned units back."}
+              {adjType === "IN"         && t("inventory.helpIn")}
+              {adjType === "OUT"        && t("inventory.helpOut")}
+              {adjType === "ADJUSTMENT" && t("inventory.helpAdjustment")}
+              {adjType === "RETURN"     && t("inventory.helpReturn")}
             </p>
 
             <div className="flex gap-2">
@@ -245,14 +248,14 @@ function ProductDetailPanel({ productId, onClose, onEdit }: {
                 type="number"
                 inputMode="numeric"
                 min={1}
-                placeholder="Qty"
+                placeholder={t("inventory.qty")}
                 value={adjQty}
                 onChange={(e) => setAdjQty(e.target.value)}
                 className="w-24 h-10 px-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-900 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
               <input
                 type="text"
-                placeholder="Note (optional)"
+                placeholder={t("inventory.noteOptional")}
                 value={adjNote}
                 onChange={(e) => setAdjNote(e.target.value)}
                 className="flex-1 h-10 px-3 bg-white border border-slate-200 rounded-xl text-sm text-slate-700 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
@@ -264,7 +267,7 @@ function ProductDetailPanel({ productId, onClose, onEdit }: {
               >
                 {adjustStock.isPending
                   ? <span className="h-3.5 w-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin" />
-                  : <><Save className="h-3.5 w-3.5" /> Save</>
+                  : <><Save className="h-3.5 w-3.5" /> {t("common.save")}</>
                 }
               </button>
             </div>
@@ -278,7 +281,7 @@ function ProductDetailPanel({ productId, onClose, onEdit }: {
               onClick={() => setShowHistory((v) => !v)}
               className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 hover:text-slate-600 transition-colors"
             >
-              History ({product.stockMovements.length})
+              {t("inventory.history", { count: product.stockMovements.length })}
               {showHistory ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
             </button>
             {showHistory && (
@@ -291,14 +294,14 @@ function ProductDetailPanel({ productId, onClose, onEdit }: {
                         <cfg.Icon className="h-3 w-3" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-xs font-semibold text-slate-700">{cfg.label}</p>
+                        <p className="text-xs font-semibold text-slate-700">{t(cfg.labelKey)}</p>
                         {m.note && <p className="text-[11px] text-slate-400 truncate">{m.note}</p>}
                       </div>
                       <div className="text-right shrink-0">
                         <p className={cn("text-xs font-bold tabular-nums", cfg.color.split(" ")[0])}>
                           {m.type === "ADJUSTMENT" ? `→ ${m.quantity}` : m.type === "OUT" ? `−${m.quantity}` : `+${m.quantity}`}
                         </p>
-                        <p className="text-[10px] text-slate-400">{formatDate(m.createdAt)}</p>
+                        <p className="text-[10px] text-slate-400">{formatDate(m.createdAt, language)}</p>
                       </div>
                     </div>
                   );
@@ -316,17 +319,17 @@ function ProductDetailPanel({ productId, onClose, onEdit }: {
           className="flex-1 h-10 flex items-center justify-center gap-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-all"
         >
           <Pencil className="h-3.5 w-3.5" />
-          Edit
+          {t("common.edit")}
         </button>
         <button
           onClick={() => {
-            if (confirm(`Archive "${product.name}"? It will no longer appear in the POS.`)) {
+            if (confirm(t("inventory.archiveConfirm", { name: product.name }))) {
               deleteProduct.mutate({ id: product.id });
             }
           }}
           disabled={deleteProduct.isPending}
           className="h-10 w-10 flex items-center justify-center rounded-xl border border-red-100 text-red-400 hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-all disabled:opacity-40"
-          aria-label="Archive product"
+          aria-label={t("inventory.archiveProduct")}
         >
           <Trash2 className="h-3.5 w-3.5" />
         </button>
@@ -349,6 +352,7 @@ function ProductFormPanel({ productId, categories, onClose }: {
 }) {
   const { toast } = useToast();
   const utils = trpc.useUtils();
+  const { t } = useTranslation();
   const isEdit = !!productId;
 
   const { data: product, isLoading: loadingProduct } = trpc.products.getById.useQuery(
@@ -381,8 +385,8 @@ function ProductFormPanel({ productId, categories, onClose }: {
 
   const validate = () => {
     const errs: Partial<Record<keyof FormState, string>> = {};
-    if (!form.name.trim())                          errs.name  = "Name is required";
-    if (!form.price || parseFloat(form.price) <= 0) errs.price = "Enter a valid price";
+    if (!form.name.trim())                          errs.name  = t("inventory.nameRequired");
+    if (!form.price || parseFloat(form.price) <= 0) errs.price = t("inventory.validPrice");
     setErrors(errs);
     return Object.keys(errs).length === 0;
   };
@@ -390,19 +394,19 @@ function ProductFormPanel({ productId, categories, onClose }: {
   const createProduct = trpc.products.create.useMutation({
     onSuccess: () => {
       utils.products.list.invalidate();
-      toast({ title: "Product created" });
+      toast({ title: t("inventory.productCreated") });
       onClose();
     },
-    onError: (e) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e) => toast({ title: t("common.error"), description: e.message, variant: "destructive" }),
   });
 
   const updateProduct = trpc.products.update.useMutation({
     onSuccess: () => {
       utils.products.list.invalidate();
-      toast({ title: "Product updated" });
+      toast({ title: t("inventory.productUpdated") });
       onClose();
     },
-    onError: (e) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e) => toast({ title: t("common.error"), description: e.message, variant: "destructive" }),
   });
 
   const handleSubmit = () => {
@@ -474,23 +478,23 @@ function ProductFormPanel({ productId, categories, onClose }: {
           <ArrowLeft className="h-4 w-4" />
         </button>
         <div>
-          <p className="text-sm font-black text-slate-900">{isEdit ? "Edit Product" : "New Product"}</p>
-          <p className="text-xs text-slate-400">{isEdit ? `Editing: ${product?.name ?? "…"}` : "Fill in the details below"}</p>
+          <p className="text-sm font-black text-slate-900">{isEdit ? t("inventory.editProduct") : t("inventory.newProduct")}</p>
+          <p className="text-xs text-slate-400">{isEdit ? t("inventory.editingName", { name: product?.name ?? "…" }) : t("inventory.fillDetails")}</p>
         </div>
       </div>
 
       {/* Form body */}
       <div className="flex-1 overflow-y-auto min-h-0 px-5 py-5 space-y-4">
 
-        <Field label="Product Name *" name="name" placeholder="e.g. Wireless Headphones" />
+        <Field label={`${t("inventory.productName")} *`} name="name" placeholder={t("inventory.namePlaceholder")} />
 
         <div>
           <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-            Description
+            {t("common.description")}
           </label>
           <textarea
             rows={3}
-            placeholder="Short product description..."
+            placeholder={t("inventory.descriptionPlaceholder")}
             value={form.description}
             onChange={set("description")}
             className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-800 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
@@ -498,38 +502,38 @@ function ProductFormPanel({ productId, categories, onClose }: {
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Selling Price *" name="price" type="number" placeholder="0.00" />
-          <Field label="Cost Price"      name="costPrice" type="number" placeholder="0.00" />
+          <Field label={`${t("inventory.sellingPrice")} *`} name="price" type="number" placeholder="0.00" />
+          <Field label={t("inventory.costPrice")}      name="costPrice" type="number" placeholder="0.00" />
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-          <Field label="SKU"     name="sku"     placeholder="ABC-001" />
-          <Field label="Barcode" name="barcode" placeholder="1234567890" />
+          <Field label={t("inventory.sku")}     name="sku"     placeholder="ABC-001" />
+          <Field label={t("inventory.barcode")} name="barcode" placeholder="1234567890" />
         </div>
 
         <div>
           <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-            Category
+            {t("inventory.category")}
           </label>
           <select
             value={form.categoryId}
             onChange={set("categoryId")}
             className="w-full h-11 px-3 bg-white border border-slate-200 rounded-xl text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
           >
-            <option value="">No category</option>
+            <option value="">{t("inventory.noCategory")}</option>
             {categories.map((c) => (
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}
           </select>
         </div>
 
-        <Field label="Image URL" name="imageUrl" placeholder="https://..." />
+        <Field label={t("inventory.imageUrl")} name="imageUrl" placeholder="https://..." />
 
         {!isEdit && (
           <div className="flex gap-2.5 px-4 py-3 bg-indigo-50 rounded-xl border border-indigo-100">
             <Boxes className="h-4 w-4 text-indigo-500 shrink-0 mt-0.5" />
             <p className="text-xs text-indigo-700 font-medium">
-              A <strong>Default</strong> variant will be created with 0 stock. You can add more variants and adjust stock from the product detail view.
+              {t("inventory.defaultVariantNote")}
             </p>
           </div>
         )}
@@ -541,7 +545,7 @@ function ProductFormPanel({ productId, categories, onClose }: {
           onClick={onClose}
           className="flex-1 h-12 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-all"
         >
-          Cancel
+          {t("common.cancel")}
         </button>
         <button
           onClick={handleSubmit}
@@ -551,7 +555,7 @@ function ProductFormPanel({ productId, categories, onClose }: {
           {isPending ? (
             <span className="h-4 w-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
           ) : (
-            <><CheckCircle2 className="h-4 w-4" /> {isEdit ? "Save Changes" : "Create Product"}</>
+            <><CheckCircle2 className="h-4 w-4" /> {isEdit ? t("common.saveChanges") : t("inventory.createProduct")}</>
           )}
         </button>
       </div>
@@ -567,31 +571,32 @@ function CategoryManager({ categories, onRefresh }: {
 }) {
   const { toast } = useToast();
   const utils = trpc.useUtils();
+  const { t } = useTranslation();
   const [newName, setNewName]     = useState("");
   const [newColor, setNewColor]   = useState("#6366f1");
   const [editId, setEditId]       = useState<string | null>(null);
   const [editName, setEditName]   = useState("");
 
   const createCat = trpc.categories.create.useMutation({
-    onSuccess: () => { utils.categories.list.invalidate(); setNewName(""); toast({ title: "Category created" }); },
-    onError: (e) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onSuccess: () => { utils.categories.list.invalidate(); setNewName(""); toast({ title: t("inventory.categoryCreated") }); },
+    onError: (e) => toast({ title: t("common.error"), description: e.message, variant: "destructive" }),
   });
 
   const updateCat = trpc.categories.update.useMutation({
-    onSuccess: () => { utils.categories.list.invalidate(); setEditId(null); toast({ title: "Category updated" }); },
-    onError: (e) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onSuccess: () => { utils.categories.list.invalidate(); setEditId(null); toast({ title: t("inventory.categoryUpdated") }); },
+    onError: (e) => toast({ title: t("common.error"), description: e.message, variant: "destructive" }),
   });
 
   const deleteCat = trpc.categories.delete.useMutation({
-    onSuccess: () => { utils.categories.list.invalidate(); toast({ title: "Category deleted" }); },
-    onError: (e) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onSuccess: () => { utils.categories.list.invalidate(); toast({ title: t("inventory.categoryDeleted") }); },
+    onError: (e) => toast({ title: t("common.error"), description: e.message, variant: "destructive" }),
   });
 
   return (
     <div className="space-y-5">
       {/* Add new */}
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
-        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3">New Category</p>
+        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3">{t("inventory.newCategory")}</p>
         <div className="flex gap-2">
           <div className="flex items-center gap-2 flex-1">
             <input
@@ -599,11 +604,11 @@ function CategoryManager({ categories, onRefresh }: {
               value={newColor}
               onChange={(e) => setNewColor(e.target.value)}
               className="w-10 h-10 rounded-xl border border-slate-200 cursor-pointer p-0.5 bg-white"
-              title="Pick a color"
+              title={t("inventory.pickColor")}
             />
             <input
               type="text"
-              placeholder="Category name..."
+              placeholder={t("inventory.categoryNamePlaceholder")}
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && newName.trim() && createCat.mutate({ name: newName.trim(), color: newColor })}
@@ -615,7 +620,7 @@ function CategoryManager({ categories, onRefresh }: {
             disabled={!newName.trim() || createCat.isPending}
             className="h-10 px-4 bg-indigo-600 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 hover:bg-indigo-700 disabled:opacity-40 transition-all"
           >
-            {createCat.isPending ? <span className="h-3.5 w-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin" /> : <><Plus className="h-3.5 w-3.5" /> Add</>}
+            {createCat.isPending ? <span className="h-3.5 w-3.5 rounded-full border-2 border-white/30 border-t-white animate-spin" /> : <><Plus className="h-3.5 w-3.5" /> {t("common.add")}</>}
           </button>
         </div>
       </div>
@@ -625,7 +630,7 @@ function CategoryManager({ categories, onRefresh }: {
         {categories.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-center">
             <FolderOpen className="h-8 w-8 text-slate-200 mb-3" />
-            <p className="text-sm font-semibold text-slate-400">No categories yet</p>
+            <p className="text-sm font-semibold text-slate-400">{t("inventory.noCategories")}</p>
           </div>
         ) : (
           <div className="divide-y divide-slate-50">
@@ -649,14 +654,14 @@ function CategoryManager({ categories, onRefresh }: {
                 ) : (
                   <span className="flex-1 text-sm font-semibold text-slate-800">{cat.name}</span>
                 )}
-                <span className="text-xs text-slate-400 tabular-nums mr-2">{cat._count.products} products</span>
+                <span className="text-xs text-slate-400 tabular-nums mr-2">{t("inventory.productsCount", { count: cat._count.products })}</span>
                 {editId === cat.id ? (
                   <div className="flex gap-1">
                     <button
                       onClick={() => editName.trim() && updateCat.mutate({ id: cat.id, name: editName.trim() })}
                       className="h-7 px-2.5 bg-indigo-600 text-white rounded-lg text-xs font-semibold"
-                    >Save</button>
-                    <button onClick={() => setEditId(null)} className="h-7 px-2.5 bg-slate-100 text-slate-600 rounded-lg text-xs font-semibold">Cancel</button>
+                    >{t("common.save")}</button>
+                    <button onClick={() => setEditId(null)} className="h-7 px-2.5 bg-slate-100 text-slate-600 rounded-lg text-xs font-semibold">{t("common.cancel")}</button>
                   </div>
                 ) : (
                   <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -669,10 +674,10 @@ function CategoryManager({ categories, onRefresh }: {
                     <button
                       onClick={() => {
                         if (cat._count.products > 0) {
-                          toast({ title: "Cannot delete", description: "Remove all products from this category first.", variant: "destructive" });
+                          toast({ title: t("inventory.cannotDelete"), description: t("inventory.cannotDeleteDesc"), variant: "destructive" });
                           return;
                         }
-                        if (confirm(`Delete "${cat.name}"?`)) deleteCat.mutate({ id: cat.id });
+                        if (confirm(t("inventory.deleteConfirm", { name: cat.name }))) deleteCat.mutate({ id: cat.id });
                       }}
                       className="w-7 h-7 flex items-center justify-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors"
                     >
@@ -693,6 +698,7 @@ function CategoryManager({ categories, onRefresh }: {
 
 export function InventoryView() {
   const formatCurrency = useFormatCurrency();
+  const { t } = useTranslation();
   const [tab, setTab]             = useState<"products" | "categories">("products");
   const [search, setSearch]       = useState("");
   const [catFilter, setCatFilter] = useState("");
@@ -728,8 +734,8 @@ export function InventoryView() {
       {/* ── Header ─────────────────────────────────────────────── */}
       <div className="flex items-start justify-between shrink-0 gap-4">
         <div>
-          <h1 className="text-2xl font-black text-slate-900 tracking-tight">Inventory</h1>
-          <p className="text-sm text-slate-400 mt-0.5">Manage products, stock levels, and categories</p>
+          <h1 className="text-2xl font-black text-slate-900 tracking-tight">{t("inventory.title")}</h1>
+          <p className="text-sm text-slate-400 mt-0.5">{t("inventory.subtitle")}</p>
         </div>
         {tab === "products" && (
           <button
@@ -737,7 +743,7 @@ export function InventoryView() {
             className="flex items-center gap-2 h-10 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold shadow-sm shadow-indigo-200 transition-all active:scale-[0.97] shrink-0"
           >
             <Plus className="h-4 w-4" />
-            Add Product
+            {t("inventory.addProduct")}
           </button>
         )}
       </div>
@@ -745,8 +751,8 @@ export function InventoryView() {
       {/* ── Tabs ───────────────────────────────────────────────── */}
       <div className="flex gap-1 bg-slate-100 rounded-xl p-1 w-fit shrink-0">
         {([
-          { key: "products",   label: "Products",   Icon: Package    },
-          { key: "categories", label: "Categories", Icon: FolderOpen },
+          { key: "products",   label: t("inventory.tabProducts"),   Icon: Package    },
+          { key: "categories", label: t("inventory.tabCategories"), Icon: FolderOpen },
         ] as const).map(({ key, label, Icon }) => (
           <button
             key={key}
@@ -776,7 +782,7 @@ export function InventoryView() {
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
               <input
                 type="search"
-                placeholder="Search by name, SKU, barcode..."
+                placeholder={t("inventory.searchPlaceholder")}
                 value={search}
                 onChange={(e) => handleSearch(e.target.value)}
                 className="w-full h-11 pl-10 pr-10 bg-white border border-slate-200 rounded-xl text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm"
@@ -795,7 +801,7 @@ export function InventoryView() {
                 onChange={(e) => handleCat(e.target.value)}
                 className="h-11 px-3 bg-white border border-slate-200 rounded-xl text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm pr-8"
               >
-                <option value="">All categories</option>
+                <option value="">{t("inventory.allCategories")}</option>
                 {categories.map((c) => (
                   <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
@@ -812,7 +818,7 @@ export function InventoryView() {
                 )}
               >
                 <AlertTriangle className="h-3.5 w-3.5" />
-                Low Stock
+                {t("inventory.lowStock")}
               </button>
 
               {/* View toggle */}
@@ -820,14 +826,14 @@ export function InventoryView() {
                 <button
                   onClick={() => setViewMode("grid")}
                   className={cn("w-10 h-11 flex items-center justify-center transition-colors", viewMode === "grid" ? "bg-slate-900 text-white" : "text-slate-400 hover:text-slate-700")}
-                  aria-label="Grid view"
+                  aria-label={t("inventory.gridView")}
                 >
                   <LayoutGrid className="h-3.5 w-3.5" />
                 </button>
                 <button
                   onClick={() => setViewMode("table")}
                   className={cn("w-10 h-11 flex items-center justify-center transition-colors border-l border-slate-200", viewMode === "table" ? "bg-slate-900 text-white" : "text-slate-400 hover:text-slate-700")}
-                  aria-label="Table view"
+                  aria-label={t("inventory.tableView")}
                 >
                   <LayoutList className="h-3.5 w-3.5" />
                 </button>
@@ -838,8 +844,8 @@ export function InventoryView() {
           {/* Results bar */}
           <div className="flex items-center justify-between shrink-0">
             <p className="text-sm text-slate-500">
-              {isLoading ? "Loading..." : (
-                <><span className="font-semibold text-slate-800">{totalCount}</span> product{totalCount !== 1 ? "s" : ""}{lowStock && " · Low stock"}</>
+              {isLoading ? t("common.loading") : (
+                <><span className="font-semibold text-slate-800">{totalCount}</span> {totalCount !== 1 ? t("inventory.productCountPlural") : t("inventory.productCount")}{lowStock && ` · ${t("inventory.lowStockSuffix")}`}</>
               )}
             </p>
             {isFetching && !isLoading && (
@@ -872,10 +878,10 @@ export function InventoryView() {
                 <div className="w-16 h-16 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-center mb-4">
                   <Package className="h-7 w-7 text-slate-200" />
                 </div>
-                <p className="text-sm font-semibold text-slate-400">No products found</p>
+                <p className="text-sm font-semibold text-slate-400">{t("inventory.noProducts")}</p>
                 {(search || catFilter || lowStock) && (
                   <button onClick={() => { handleSearch(""); handleCat(""); setLowStock(false); }} className="text-xs text-indigo-600 mt-2.5 hover:underline font-semibold">
-                    Clear filters
+                    {t("inventory.clearFilters")}
                   </button>
                 )}
               </div>
@@ -908,7 +914,7 @@ export function InventoryView() {
                           <Package className={cn("h-4 w-4", isOut ? "text-red-300" : isLow ? "text-amber-400" : "text-slate-300")} />
                         </div>
                         <span className={cn("text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0", st.pill)}>
-                          {isOut ? "Out" : `${totalStock}`}
+                          {isOut ? t("inventory.statusOut") : `${totalStock}`}
                         </span>
                       </div>
 
@@ -929,7 +935,7 @@ export function InventoryView() {
                       {isLow && !isOut && (
                         <div className="flex items-center gap-1 text-[10px] font-bold text-amber-600">
                           <AlertTriangle className="h-3 w-3" />
-                          Low stock
+                          {t("inventory.lowStockSuffix")}
                         </div>
                       )}
                     </button>
@@ -942,9 +948,12 @@ export function InventoryView() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-slate-100">
-                      {["Product", "SKU", "Category", "Price / Cost", "Stock", "Status"].map((h) => (
+                      {([
+                        "inventory.colProduct", "inventory.sku", "inventory.category",
+                        "inventory.colPriceCost", "inventory.colStock", "common.status",
+                      ] as const).map((h) => (
                         <th key={h} className="px-5 py-3 text-left text-[11px] font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap">
-                          {h}
+                          {t(h)}
                         </th>
                       ))}
                     </tr>
@@ -977,17 +986,17 @@ export function InventoryView() {
                           </td>
                           <td className="px-5 py-3.5">
                             <p className="font-bold text-slate-900 tabular-nums">{formatCurrency(product.price)}</p>
-                            <p className="text-xs text-slate-400 tabular-nums">Cost: {formatCurrency(product.costPrice)}</p>
+                            <p className="text-xs text-slate-400 tabular-nums">{t("inventory.costLabel", { amount: formatCurrency(product.costPrice) })}</p>
                           </td>
                           <td className="px-5 py-3.5">
                             <span className={cn("font-bold tabular-nums", totalStock === 0 ? "text-red-500" : isLow ? "text-amber-600" : "text-slate-900")}>
                               {totalStock}
                             </span>
-                            <span className="text-xs text-slate-400 ml-1">{product.variants.length > 1 ? `(${product.variants.length} variants)` : "units"}</span>
+                            <span className="text-xs text-slate-400 ml-1">{product.variants.length > 1 ? t("inventory.variantsCount", { count: product.variants.length }) : t("inventory.units")}</span>
                           </td>
                           <td className="px-5 py-3.5">
                             <span className={cn("text-[11px] font-bold px-2.5 py-1 rounded-full", st.pill)}>
-                              {st.label}
+                              {t(st.labelKey)}
                             </span>
                           </td>
                         </tr>
@@ -1007,17 +1016,17 @@ export function InventoryView() {
                 disabled={page <= 1}
                 className="flex items-center gap-1.5 h-9 px-4 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
               >
-                <ChevronLeft className="h-3.5 w-3.5" /> Previous
+                <ChevronLeft className="h-3.5 w-3.5" /> {t("orders.previous")}
               </button>
               <span className="text-xs text-slate-500 tabular-nums">
-                Page <span className="font-bold text-slate-800">{page}</span> of <span className="font-bold text-slate-800">{totalPages}</span>
+                {t("orders.pageOf", { page, total: totalPages })}
               </span>
               <button
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                 disabled={page >= totalPages}
                 className="flex items-center gap-1.5 h-9 px-4 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
               >
-                Next <ChevronRight className="h-3.5 w-3.5" />
+                {t("orders.next")} <ChevronRight className="h-3.5 w-3.5" />
               </button>
             </div>
           )}

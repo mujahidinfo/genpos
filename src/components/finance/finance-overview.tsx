@@ -4,6 +4,7 @@ import { useState } from "react";
 import { trpc } from "@/lib/trpc/client";
 import { useFormatCurrency } from "@/lib/currency-context";
 import { cn } from "@/lib/utils";
+import { useTranslation, type TranslationKey } from "@/lib/i18n/language-context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FinanceNav } from "./finance-nav";
 import {
@@ -16,10 +17,10 @@ import {
 } from "recharts";
 
 const PERIODS = [
-  { label: "7 days", value: 7 },
-  { label: "30 days", value: 30 },
-  { label: "90 days", value: 90 },
-] as const;
+  { labelKey: "orders.days7", value: 7 },
+  { labelKey: "orders.days30", value: 30 },
+  { labelKey: "analytics.days90", value: 90 },
+] as const satisfies readonly { labelKey: TranslationKey; value: number }[];
 
 const PIE_COLORS = [
   "#6366f1", "#f59e0b", "#10b981", "#ef4444",
@@ -29,6 +30,7 @@ const PIE_COLORS = [
 export function FinanceOverview() {
   const [days, setDays] = useState<7 | 30 | 90>(30);
   const formatCurrency = useFormatCurrency();
+  const { t, language } = useTranslation();
 
   const { data, isLoading } = trpc.finance.overview.useQuery({ days });
 
@@ -39,9 +41,9 @@ export function FinanceOverview() {
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Finance</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">{t("finance.title")}</h1>
           <p className="text-sm text-slate-500 mt-0.5">
-            Track income, expenses, and financial health
+            {t("finance.overviewSubtitle")}
           </p>
         </div>
         <div className="flex gap-1 p-1 bg-slate-100 rounded-lg">
@@ -56,7 +58,7 @@ export function FinanceOverview() {
                   : "text-slate-500 hover:text-slate-700",
               )}
             >
-              {p.label}
+              {t(p.labelKey)}
             </button>
           ))}
         </div>
@@ -67,33 +69,33 @@ export function FinanceOverview() {
       {/* Stat Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
-          label="Total Income"
+          label={t("finance.totalIncome")}
           value={formatCurrency(data?.totalIncome ?? 0)}
-          sub={`${data?.orderCount ?? 0} orders`}
+          sub={t("finance.ordersCount", { count: data?.orderCount ?? 0 })}
           icon={TrendingUp}
           color="emerald"
           loading={isLoading}
         />
         <StatCard
-          label="Total Expenses"
+          label={t("finance.totalExpenses")}
           value={formatCurrency(data?.totalExpenses ?? 0)}
-          sub={`${data?.expenseCount ?? 0} entries`}
+          sub={t("finance.entriesCount", { count: data?.expenseCount ?? 0 })}
           icon={TrendingDown}
           color="red"
           loading={isLoading}
         />
         <StatCard
-          label="Net Profit / Loss"
+          label={t("finance.netProfitLoss")}
           value={formatCurrency(Math.abs(data?.netProfit ?? 0))}
-          sub={netPositive ? "Profitable" : "Loss"}
+          sub={netPositive ? t("finance.profitable") : t("finance.loss")}
           icon={netPositive ? ArrowUpRight : ArrowDownRight}
           color={netPositive ? "indigo" : "amber"}
           loading={isLoading}
         />
         <StatCard
-          label="Active Employees"
+          label={t("finance.activeEmployees")}
           value={String(data?.employeeCount ?? 0)}
-          sub={`${data?.budgetCount ?? 0} budgets`}
+          sub={t("finance.budgetsCount", { count: data?.budgetCount ?? 0 })}
           icon={Users}
           color="slate"
           loading={isLoading}
@@ -105,7 +107,7 @@ export function FinanceOverview() {
         {/* Income vs Expenses Trend */}
         <Card className="lg:col-span-2">
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">Income vs Expenses (6 months)</CardTitle>
+            <CardTitle className="text-base">{t("finance.incomeVsExpenses")}</CardTitle>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={240}>
@@ -147,7 +149,7 @@ export function FinanceOverview() {
                 />
                 <Legend
                   wrapperStyle={{ fontSize: 12, paddingTop: 8 }}
-                  formatter={(v) => (v === "income" ? "Income" : "Expenses")}
+                  formatter={(v) => (v === "income" ? t("finance.income") : t("finance.expenses"))}
                 />
                 <Area
                   type="monotone"
@@ -171,13 +173,13 @@ export function FinanceOverview() {
         {/* Expenses by Category */}
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">Expenses by Category</CardTitle>
+            <CardTitle className="text-base">{t("finance.expensesByCategory")}</CardTitle>
           </CardHeader>
           <CardContent>
             {(data?.expensesByCategory?.length ?? 0) === 0 ? (
               <div className="flex flex-col items-center justify-center h-48 text-slate-400">
                 <Receipt className="h-8 w-8 mb-2 opacity-40" />
-                <p className="text-sm">No expense data</p>
+                <p className="text-sm">{t("finance.noExpenseData")}</p>
               </div>
             ) : (
               <>
@@ -232,13 +234,13 @@ export function FinanceOverview() {
       {/* Recent Expenses */}
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-base">Recent Expenses</CardTitle>
+          <CardTitle className="text-base">{t("finance.recentExpenses")}</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           {(data?.recentExpenses?.length ?? 0) === 0 ? (
             <div className="flex flex-col items-center justify-center py-10 text-slate-400">
               <Wallet className="h-8 w-8 mb-2 opacity-40" />
-              <p className="text-sm">No expenses recorded yet</p>
+              <p className="text-sm">{t("finance.noExpensesYet")}</p>
             </div>
           ) : (
             <div className="divide-y divide-slate-100">
@@ -262,7 +264,7 @@ export function FinanceOverview() {
                       {formatCurrency(expense.amount)}
                     </p>
                     <p className="text-xs text-slate-400">
-                      {new Date(expense.date).toLocaleDateString()}
+                      {new Date(expense.date).toLocaleDateString(language === "bn" ? "bn-BD" : "en-US")}
                     </p>
                   </div>
                 </div>

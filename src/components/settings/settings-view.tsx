@@ -4,11 +4,13 @@ import { useState, useEffect } from "react";
 import { trpc } from "@/lib/trpc/client";
 import { cn } from "@/lib/utils";
 import { getCurrencySymbol, useCurrency } from "@/lib/currency-context";
+import { useTranslation, type TranslationKey } from "@/lib/i18n/language-context";
+import { LANGUAGES, type Language } from "@/lib/i18n/translations";
 import {
   Store, Mail, Phone, MapPin, Percent, Receipt, Users,
   KeyRound, Eye, EyeOff, Plus, Pencil, Check, X, Shield,
   ChevronDown, Globe, CircleDollarSign, UserCog, Lock,
-  CheckCircle2, UserPlus, ToggleLeft, ToggleRight,
+  CheckCircle2, UserPlus, ToggleLeft, ToggleRight, Languages,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { AuthUser } from "@/lib/auth";
@@ -47,21 +49,22 @@ const CURRENCIES = [
 const ROLES = ["ADMIN", "CASHIER", "INVENTORY_MANAGER"] as const;
 type Role = (typeof ROLES)[number];
 
-const ROLE_CONFIG: Record<Role, { label: string; color: string; description: string }> = {
-  ADMIN:             { label: "Admin",    color: "bg-violet-50 text-violet-700 border-violet-200", description: "Full access" },
-  CASHIER:           { label: "Cashier",  color: "bg-blue-50 text-blue-700 border-blue-200",       description: "Sales & orders" },
-  INVENTORY_MANAGER: { label: "Inventory",color: "bg-emerald-50 text-emerald-700 border-emerald-200", description: "Stock management" },
+const ROLE_CONFIG: Record<Role, { labelKey: TranslationKey; color: string; descKey: TranslationKey }> = {
+  ADMIN:             { labelKey: "roles.ADMIN",             color: "bg-violet-50 text-violet-700 border-violet-200",   descKey: "roles.adminDesc" },
+  CASHIER:           { labelKey: "roles.CASHIER",           color: "bg-blue-50 text-blue-700 border-blue-200",         descKey: "roles.cashierDesc" },
+  INVENTORY_MANAGER: { labelKey: "roles.INVENTORY_MANAGER", color: "bg-emerald-50 text-emerald-700 border-emerald-200", descKey: "roles.inventoryDesc" },
 };
 
 // ─── Tab type ─────────────────────────────────────────────────────────────────
 
-type SettingsTab = "shop" | "currency" | "team" | "account";
+type SettingsTab = "shop" | "currency" | "language" | "team" | "account";
 
-const TABS: { key: SettingsTab; label: string; Icon: React.ElementType }[] = [
-  { key: "shop",     label: "Shop",     Icon: Store           },
-  { key: "currency", label: "Currency", Icon: CircleDollarSign },
-  { key: "team",     label: "Team",     Icon: Users            },
-  { key: "account",  label: "Account",  Icon: Lock             },
+const TABS: { key: SettingsTab; labelKey: TranslationKey; Icon: React.ElementType }[] = [
+  { key: "shop",     labelKey: "settings.tabShop",     Icon: Store            },
+  { key: "currency", labelKey: "settings.tabCurrency", Icon: CircleDollarSign },
+  { key: "language", labelKey: "settings.tabLanguage", Icon: Languages        },
+  { key: "team",     labelKey: "settings.tabTeam",     Icon: Users            },
+  { key: "account",  labelKey: "settings.tabAccount",  Icon: Lock             },
 ];
 
 // ─── Field component ──────────────────────────────────────────────────────────
@@ -99,6 +102,7 @@ function TextInput({ value, onChange, type = "text", placeholder, className }: {
 // ─── Shop Settings Tab ────────────────────────────────────────────────────────
 
 function ShopTab() {
+  const { t } = useTranslation();
   const { toast } = useToast();
   const utils = trpc.useUtils();
   const { data: shop } = trpc.shop.get.useQuery();
@@ -112,19 +116,20 @@ function ShopTab() {
   const updateShop = trpc.shop.update.useMutation({
     onSuccess: () => {
       utils.shop.get.invalidate();
-      toast({ title: "Shop profile saved" });
+      toast({ title: t("settings.shopProfileSaved") });
     },
-    onError: (e) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e) => toast({ title: t("common.error"), description: e.message, variant: "destructive" }),
   });
 
   const handleSave = () => {
-    if (!form.name.trim()) { toast({ title: "Shop name is required", variant: "destructive" }); return; }
+    if (!form.name.trim()) { toast({ title: t("settings.shopNameRequired"), variant: "destructive" }); return; }
     updateShop.mutate({
       name: form.name,
       email: form.email || undefined,
       phone: form.phone || undefined,
       address: form.address || undefined,
       currency: shop?.currency ?? "USD",
+      language: shop?.language ?? "en",
       taxRate: shop?.taxRate ?? 0,
       taxName: shop?.taxName ?? "Tax",
     });
@@ -136,21 +141,21 @@ function ShopTab() {
     <div className="space-y-5">
       <SectionCard
         icon={<Store className="h-4 w-4 text-slate-500" />}
-        title="Shop Profile"
-        desc="Business identity shown on receipts and invoices"
+        title={t("settings.shopProfile")}
+        desc={t("settings.shopProfileDesc")}
       >
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Field label="Shop Name *">
+          <Field label={`${t("settings.shopName")} *`}>
             <TextInput value={form.name} onChange={set("name")} placeholder="My Awesome Store" />
           </Field>
-          <Field label="Email Address">
+          <Field label={t("settings.emailAddress")}>
             <TextInput type="email" value={form.email} onChange={set("email")} placeholder="shop@example.com" />
           </Field>
-          <Field label="Phone Number">
+          <Field label={t("settings.phoneNumber")}>
             <TextInput value={form.phone} onChange={set("phone")} placeholder="+1 (555) 000-0000" />
           </Field>
         </div>
-        <Field label="Address">
+        <Field label={t("common.address")}>
           <textarea
             rows={2}
             placeholder="123 Main St, City, Country"
@@ -159,7 +164,7 @@ function ShopTab() {
             className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-800 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
           />
         </Field>
-        <SaveButton onClick={handleSave} isPending={updateShop.isPending} />
+        <SaveButton onClick={handleSave} isPending={updateShop.isPending} label={t("common.saveChanges")} />
       </SectionCard>
     </div>
   );
@@ -168,6 +173,7 @@ function ShopTab() {
 // ─── Currency & Tax Tab ───────────────────────────────────────────────────────
 
 function CurrencyTab() {
+  const { t } = useTranslation();
   const { toast } = useToast();
   const utils = trpc.useUtils();
   const { data: shop } = trpc.shop.get.useQuery();
@@ -189,9 +195,9 @@ function CurrencyTab() {
   const updateShop = trpc.shop.update.useMutation({
     onSuccess: () => {
       utils.shop.get.invalidate();
-      toast({ title: "Currency & tax settings saved", description: "All prices across the app now reflect the new currency." });
+      toast({ title: t("settings.currencySaved"), description: t("settings.currencySavedDesc") });
     },
-    onError: (e) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e) => toast({ title: t("common.error"), description: e.message, variant: "destructive" }),
   });
 
   const handleSave = () => {
@@ -201,6 +207,7 @@ function CurrencyTab() {
       phone: shop?.phone ?? undefined,
       address: shop?.address ?? undefined,
       currency: selectedCurrency,
+      language: shop?.language ?? "en",
       taxRate: parseFloat(taxRate) || 0,
       taxName: taxName || "Tax",
     });
@@ -222,21 +229,21 @@ function CurrencyTab() {
           <span className="text-sm font-black text-indigo-700">{getCurrencySymbol(activeCurrency)}</span>
         </div>
         <div>
-          <p className="text-sm font-bold text-indigo-900">Active currency: {activeCurrency}</p>
-          <p className="text-xs text-indigo-600">Prices across the app are displayed in this currency</p>
+          <p className="text-sm font-bold text-indigo-900">{t("settings.activeCurrency", { currency: activeCurrency })}</p>
+          <p className="text-xs text-indigo-600">{t("settings.activeCurrencyDesc")}</p>
         </div>
       </div>
 
       <SectionCard
         icon={<Globe className="h-4 w-4 text-slate-500" />}
-        title="Currency"
-        desc="Select the currency used for all pricing and transactions"
+        title={t("settings.currency")}
+        desc={t("settings.currencyDesc")}
       >
         {/* Search */}
         <div className="relative mb-3">
           <input
             type="search"
-            placeholder="Search currencies..."
+            placeholder={t("settings.searchCurrencies")}
             value={currencySearch}
             onChange={(e) => setCurrencySearch(e.target.value)}
             className="w-full h-10 pl-3 pr-10 bg-slate-50 border border-slate-200 rounded-xl text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
@@ -276,13 +283,13 @@ function CurrencyTab() {
             );
           })}
           {filteredCurrencies.length === 0 && (
-            <div className="col-span-3 py-8 text-center text-sm text-slate-400">No currencies match "{currencySearch}"</div>
+            <div className="col-span-3 py-8 text-center text-sm text-slate-400">{t("settings.noCurrencyMatch", { query: currencySearch })}</div>
           )}
         </div>
 
         {/* Preview */}
         <div className="flex items-center gap-2.5 px-4 py-3 bg-slate-50 rounded-xl border border-slate-100">
-          <p className="text-xs text-slate-500">Preview:</p>
+          <p className="text-xs text-slate-500">{t("settings.preview")}</p>
           <p className="text-sm font-black text-slate-900">
             {new Intl.NumberFormat("en-US", { style: "currency", currency: selectedCurrency, minimumFractionDigits: 2 }).format(1234.56)}
           </p>
@@ -292,14 +299,14 @@ function CurrencyTab() {
 
       <SectionCard
         icon={<Percent className="h-4 w-4 text-slate-500" />}
-        title="Tax Settings"
-        desc="Configure how tax is calculated on sales"
+        title={t("settings.taxSettings")}
+        desc={t("settings.taxSettingsDesc")}
       >
         <div className="grid grid-cols-2 gap-4">
-          <Field label="Tax Name">
+          <Field label={t("settings.taxName")}>
             <TextInput value={taxName} onChange={setTaxName} placeholder="Tax / VAT / GST" />
           </Field>
-          <Field label="Tax Rate (%)">
+          <Field label={t("settings.taxRate")}>
             <div className="relative">
               <TextInput
                 type="number"
@@ -313,15 +320,94 @@ function CurrencyTab() {
           </Field>
         </div>
         <div className="flex items-center gap-2.5 px-4 py-3 bg-slate-50 rounded-xl border border-slate-100">
-          <p className="text-xs text-slate-500">On a $100.00 sale:</p>
+          <p className="text-xs text-slate-500">{t("settings.onSale")}</p>
           <p className="text-sm font-bold text-slate-900">
-            {taxName || "Tax"}: {previewSymbol}{(100 * (parseFloat(taxRate) || 0) / 100).toFixed(2)}
+            {taxName || t("common.tax")}: {previewSymbol}{(100 * (parseFloat(taxRate) || 0) / 100).toFixed(2)}
           </p>
           <p className="text-xs text-slate-500 ml-auto">
-            Total: {previewSymbol}{(100 + 100 * (parseFloat(taxRate) || 0) / 100).toFixed(2)}
+            {t("common.total")}: {previewSymbol}{(100 + 100 * (parseFloat(taxRate) || 0) / 100).toFixed(2)}
           </p>
         </div>
-        <SaveButton onClick={handleSave} isPending={updateShop.isPending} label="Save Currency & Tax" />
+        <SaveButton onClick={handleSave} isPending={updateShop.isPending} label={t("settings.saveCurrencyTax")} />
+      </SectionCard>
+    </div>
+  );
+}
+
+// ─── Language Tab ─────────────────────────────────────────────────────────────
+
+function LanguageTab() {
+  const { t, language: activeLanguage } = useTranslation();
+  const { toast } = useToast();
+  const utils = trpc.useUtils();
+  const { data: shop } = trpc.shop.get.useQuery();
+
+  const activeMeta = LANGUAGES.find((l) => l.code === activeLanguage) ?? LANGUAGES[0];
+
+  const setLanguage = trpc.shop.setLanguage.useMutation({
+    onSuccess: (updated) => {
+      utils.shop.get.invalidate();
+      const meta = LANGUAGES.find((l) => l.code === updated.language) ?? LANGUAGES[0];
+      toast({
+        title: t("settings.languageSaved"),
+        description: t("settings.languageSavedDesc", { language: meta.nativeLabel }),
+      });
+    },
+    onError: (e) => toast({ title: t("common.error"), description: e.message, variant: "destructive" }),
+  });
+
+  const handleSelect = (code: Language) => {
+    if (code === shop?.language || setLanguage.isPending) return;
+    setLanguage.mutate({ language: code });
+  };
+
+  return (
+    <div className="space-y-5">
+      {/* Active language banner */}
+      <div className="flex items-center gap-3 px-4 py-3 bg-indigo-50 border border-indigo-100 rounded-2xl">
+        <div className="w-9 h-9 rounded-xl bg-indigo-100 flex items-center justify-center shrink-0">
+          <Languages className="h-4 w-4 text-indigo-700" />
+        </div>
+        <div>
+          <p className="text-sm font-bold text-indigo-900">
+            {t("settings.activeLanguage", { language: activeMeta.nativeLabel })}
+          </p>
+          <p className="text-xs text-indigo-600">{t("settings.activeLanguageDesc")}</p>
+        </div>
+      </div>
+
+      <SectionCard
+        icon={<Globe className="h-4 w-4 text-slate-500" />}
+        title={t("settings.language")}
+        desc={t("settings.languageDesc")}
+      >
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {LANGUAGES.map((lang) => {
+            const isSelected = (shop?.language ?? "en") === lang.code;
+            return (
+              <button
+                key={lang.code}
+                onClick={() => handleSelect(lang.code)}
+                disabled={setLanguage.isPending}
+                className={cn(
+                  "flex items-center gap-3 px-4 py-3.5 rounded-xl border text-left transition-all active:scale-[0.98] disabled:opacity-60",
+                  isSelected
+                    ? "bg-indigo-600 border-indigo-600 text-white"
+                    : "bg-white border-slate-200 text-slate-700 hover:border-indigo-300 hover:bg-indigo-50",
+                )}
+              >
+                <span className={cn("text-lg font-black w-9 shrink-0 text-center", isSelected ? "text-white" : "text-slate-900")}>
+                  {lang.code.toUpperCase()}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className={cn("text-sm font-bold truncate", isSelected ? "text-white" : "text-slate-800")}>{lang.nativeLabel}</p>
+                  <p className={cn("text-xs truncate", isSelected ? "text-indigo-200" : "text-slate-400")}>{lang.label}</p>
+                </div>
+                {isSelected && <Check className="h-4 w-4 ml-auto shrink-0 text-white" />}
+              </button>
+            );
+          })}
+        </div>
       </SectionCard>
     </div>
   );
@@ -330,6 +416,7 @@ function CurrencyTab() {
 // ─── Team Tab ─────────────────────────────────────────────────────────────────
 
 function TeamTab({ currentUser }: { currentUser: AuthUser }) {
+  const { t } = useTranslation();
   const { toast } = useToast();
   const utils = trpc.useUtils();
   const { data: users = [] } = trpc.users.list.useQuery();
@@ -346,26 +433,26 @@ function TeamTab({ currentUser }: { currentUser: AuthUser }) {
       utils.users.list.invalidate();
       setNewUser({ name: "", email: "", password: "", role: "CASHIER" });
       setShowAddForm(false);
-      toast({ title: "User created successfully" });
+      toast({ title: t("settings.userCreated") });
     },
-    onError: (e) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e) => toast({ title: t("common.error"), description: e.message, variant: "destructive" }),
   });
 
   const updateUser = trpc.users.update.useMutation({
-    onSuccess: () => { utils.users.list.invalidate(); setEditingUserId(null); toast({ title: "User updated" }); },
-    onError: (e) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onSuccess: () => { utils.users.list.invalidate(); setEditingUserId(null); toast({ title: t("settings.userUpdated") }); },
+    onError: (e) => toast({ title: t("common.error"), description: e.message, variant: "destructive" }),
   });
 
   const toggleActive = (id: string, current: boolean, name: string) => {
-    if (id === currentUser.id) { toast({ title: "Cannot deactivate yourself", variant: "destructive" }); return; }
+    if (id === currentUser.id) { toast({ title: t("settings.cannotDeactivateSelf"), variant: "destructive" }); return; }
     updateUser.mutate({ id, isActive: !current });
   };
 
   const handleAddUser = () => {
     const errs: Record<string, string> = {};
-    if (!newUser.name.trim())             errs.name     = "Name is required";
-    if (!newUser.email.trim())            errs.email    = "Email is required";
-    if (!newUser.password || newUser.password.length < 6) errs.password = "Min 6 characters";
+    if (!newUser.name.trim())             errs.name     = t("settings.nameRequired");
+    if (!newUser.email.trim())            errs.email    = t("settings.emailRequired");
+    if (!newUser.password || newUser.password.length < 6) errs.password = t("settings.minChars");
     setErrors(errs);
     if (Object.keys(errs).length) return;
     createUser.mutate(newUser);
@@ -377,22 +464,22 @@ function TeamTab({ currentUser }: { currentUser: AuthUser }) {
       {showAddForm && (
         <SectionCard
           icon={<UserPlus className="h-4 w-4 text-indigo-500" />}
-          title="Add Team Member"
-          desc="Create a new account for your team"
+          title={t("settings.addTeamMember")}
+          desc={t("settings.addTeamMemberDesc")}
           accent
         >
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Field label="Full Name *" error={errors.name}>
+            <Field label={`${t("settings.fullName")} *`} error={errors.name}>
               <TextInput value={newUser.name} onChange={(v) => setNewUser((p) => ({ ...p, name: v }))} placeholder="Jane Doe" />
             </Field>
-            <Field label="Email Address *" error={errors.email}>
+            <Field label={`${t("settings.emailAddress")} *`} error={errors.email}>
               <TextInput type="email" value={newUser.email} onChange={(v) => setNewUser((p) => ({ ...p, email: v }))} placeholder="jane@store.com" />
             </Field>
-            <Field label="Password *" error={errors.password}>
+            <Field label={`${t("settings.password")} *`} error={errors.password}>
               <div className="relative">
                 <input
                   type={showPassword ? "text" : "password"}
-                  placeholder="Min 6 characters"
+                  placeholder={t("settings.minChars")}
                   value={newUser.password}
                   onChange={(e) => setNewUser((p) => ({ ...p, password: e.target.value }))}
                   className="w-full h-11 pl-3 pr-10 bg-white border border-slate-200 rounded-xl text-sm placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
@@ -406,14 +493,14 @@ function TeamTab({ currentUser }: { currentUser: AuthUser }) {
                 </button>
               </div>
             </Field>
-            <Field label="Role">
+            <Field label={t("settings.role")}>
               <select
                 value={newUser.role}
                 onChange={(e) => setNewUser((p) => ({ ...p, role: e.target.value as Role }))}
                 className="w-full h-11 px-3 bg-white border border-slate-200 rounded-xl text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
               >
                 {ROLES.map((r) => (
-                  <option key={r} value={r}>{ROLE_CONFIG[r].label} — {ROLE_CONFIG[r].description}</option>
+                  <option key={r} value={r}>{t(ROLE_CONFIG[r].labelKey)} — {t(ROLE_CONFIG[r].descKey)}</option>
                 ))}
               </select>
             </Field>
@@ -423,7 +510,7 @@ function TeamTab({ currentUser }: { currentUser: AuthUser }) {
               onClick={() => { setShowAddForm(false); setErrors({}); }}
               className="flex-1 h-11 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-all"
             >
-              Cancel
+              {t("common.cancel")}
             </button>
             <button
               onClick={handleAddUser}
@@ -432,7 +519,7 @@ function TeamTab({ currentUser }: { currentUser: AuthUser }) {
             >
               {createUser.isPending
                 ? <span className="h-4 w-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
-                : <><UserPlus className="h-4 w-4" /> Create Account</>
+                : <><UserPlus className="h-4 w-4" /> {t("settings.createAccount")}</>
               }
             </button>
           </div>
@@ -441,21 +528,23 @@ function TeamTab({ currentUser }: { currentUser: AuthUser }) {
 
       <SectionCard
         icon={<Users className="h-4 w-4 text-slate-500" />}
-        title="Team Members"
-        desc={`${users.length} member${users.length !== 1 ? "s" : ""} in your team`}
+        title={t("settings.teamMembers")}
+        desc={users.length === 1
+          ? t("settings.memberCount", { count: users.length })
+          : t("settings.memberCountPlural", { count: users.length })}
         action={
           !showAddForm ? (
             <button
               onClick={() => setShowAddForm(true)}
               className="flex items-center gap-1.5 h-8 px-3 bg-indigo-600 text-white rounded-lg text-xs font-bold hover:bg-indigo-700 transition-all"
             >
-              <Plus className="h-3.5 w-3.5" /> Add Member
+              <Plus className="h-3.5 w-3.5" /> {t("settings.addMember")}
             </button>
           ) : undefined
         }
       >
         {users.length === 0 ? (
-          <div className="py-8 text-center text-sm text-slate-400">No team members yet</div>
+          <div className="py-8 text-center text-sm text-slate-400">{t("settings.noTeamMembers")}</div>
         ) : (
           <div className="divide-y divide-slate-50 -mx-5 -mb-5">
             {users.map((u) => {
@@ -475,7 +564,7 @@ function TeamTab({ currentUser }: { currentUser: AuthUser }) {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="text-sm font-semibold text-slate-800 truncate">{u.name}</p>
-                      {isSelf && <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">You</span>}
+                      {isSelf && <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">{t("settings.you")}</span>}
                     </div>
                     <p className="text-xs text-slate-400 truncate">{u.email}</p>
                   </div>
@@ -489,7 +578,7 @@ function TeamTab({ currentUser }: { currentUser: AuthUser }) {
                         className="h-8 px-2 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
                       >
                         {ROLES.map((r) => (
-                          <option key={r} value={r}>{ROLE_CONFIG[r].label}</option>
+                          <option key={r} value={r}>{t(ROLE_CONFIG[r].labelKey)}</option>
                         ))}
                       </select>
                       <button
@@ -508,9 +597,9 @@ function TeamTab({ currentUser }: { currentUser: AuthUser }) {
                   ) : (
                     <span className={cn("text-[11px] font-bold px-2.5 py-1 rounded-full border shrink-0 cursor-pointer hover:opacity-80 transition-opacity", cfg.color)}
                       onClick={() => { if (!isSelf) { setEditingUserId(u.id); setEditRole(role); } }}
-                      title={isSelf ? "Cannot change your own role" : "Click to change role"}
+                      title={isSelf ? t("settings.cannotChangeOwnRole") : t("settings.clickToChangeRole")}
                     >
-                      {cfg.label}
+                      {t(cfg.labelKey)}
                     </span>
                   )}
 
@@ -522,7 +611,7 @@ function TeamTab({ currentUser }: { currentUser: AuthUser }) {
                       "shrink-0 transition-colors",
                       isSelf ? "opacity-30 cursor-not-allowed" : "hover:opacity-75"
                     )}
-                    title={u.isActive ? "Deactivate user" : "Activate user"}
+                    title={u.isActive ? t("settings.deactivateUser") : t("settings.activateUser")}
                   >
                     {u.isActive
                       ? <ToggleRight className="h-5 w-5 text-emerald-500" />
@@ -542,6 +631,7 @@ function TeamTab({ currentUser }: { currentUser: AuthUser }) {
 // ─── Account Tab ──────────────────────────────────────────────────────────────
 
 function AccountTab({ user }: { user: AuthUser }) {
+  const { t } = useTranslation();
   const { toast } = useToast();
   const [form, setForm] = useState({ current: "", next: "", confirm: "" });
   const [showCurrent, setShowCurrent] = useState(false);
@@ -550,14 +640,14 @@ function AccountTab({ user }: { user: AuthUser }) {
   const changePassword = trpc.users.changePassword.useMutation({
     onSuccess: () => {
       setForm({ current: "", next: "", confirm: "" });
-      toast({ title: "Password changed successfully" });
+      toast({ title: t("settings.passwordChanged") });
     },
-    onError: (e) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e) => toast({ title: t("common.error"), description: e.message, variant: "destructive" }),
   });
 
   const handleChange = () => {
-    if (form.next.length < 6) { toast({ title: "New password must be at least 6 characters", variant: "destructive" }); return; }
-    if (form.next !== form.confirm) { toast({ title: "New passwords don't match", variant: "destructive" }); return; }
+    if (form.next.length < 6) { toast({ title: t("settings.passwordMin6"), variant: "destructive" }); return; }
+    if (form.next !== form.confirm) { toast({ title: t("settings.passwordsDontMatch"), variant: "destructive" }); return; }
     changePassword.mutate({ currentPassword: form.current, newPassword: form.next });
   };
 
@@ -572,7 +662,7 @@ function AccountTab({ user }: { user: AuthUser }) {
     return s;
   })();
 
-  const strengthLabel = ["", "Weak", "Fair", "Good", "Strong"][strength];
+  const strengthLabel = ["", t("settings.strengthWeak"), t("settings.strengthFair"), t("settings.strengthGood"), t("settings.strengthStrong")][strength];
   const strengthColor = ["", "bg-red-400", "bg-amber-400", "bg-blue-400", "bg-emerald-500"][strength];
 
   const PasswordInput = ({ label, value, onChange, show, onToggle }: {
@@ -599,8 +689,8 @@ function AccountTab({ user }: { user: AuthUser }) {
       {/* Identity card */}
       <SectionCard
         icon={<UserCog className="h-4 w-4 text-slate-500" />}
-        title="My Account"
-        desc="Your profile and account information"
+        title={t("settings.myAccount")}
+        desc={t("settings.myAccountDesc")}
       >
         <div className="flex items-center gap-4">
           <div className="w-14 h-14 rounded-2xl bg-indigo-100 flex items-center justify-center shrink-0">
@@ -610,7 +700,7 @@ function AccountTab({ user }: { user: AuthUser }) {
             <p className="text-base font-bold text-slate-900">{user.name}</p>
             <p className="text-sm text-slate-500">{user.email}</p>
             <span className={cn("inline-block mt-1 text-[11px] font-bold px-2.5 py-0.5 rounded-full border", ROLE_CONFIG[user.role as Role]?.color ?? "bg-slate-100 text-slate-600")}>
-              {ROLE_CONFIG[user.role as Role]?.label ?? user.role}
+              {ROLE_CONFIG[user.role as Role] ? t(ROLE_CONFIG[user.role as Role].labelKey) : user.role}
             </span>
           </div>
         </div>
@@ -619,11 +709,11 @@ function AccountTab({ user }: { user: AuthUser }) {
       {/* Change password */}
       <SectionCard
         icon={<KeyRound className="h-4 w-4 text-slate-500" />}
-        title="Change Password"
-        desc="Update your login password"
+        title={t("settings.changePassword")}
+        desc={t("settings.changePasswordDesc")}
       >
         <PasswordInput
-          label="Current Password"
+          label={t("settings.currentPassword")}
           value={form.current}
           onChange={(v) => setForm((p) => ({ ...p, current: v }))}
           show={showCurrent}
@@ -631,7 +721,7 @@ function AccountTab({ user }: { user: AuthUser }) {
         />
         <div className="h-px" />
         <PasswordInput
-          label="New Password"
+          label={t("settings.newPassword")}
           value={form.next}
           onChange={(v) => setForm((p) => ({ ...p, next: v }))}
           show={showNext}
@@ -653,7 +743,7 @@ function AccountTab({ user }: { user: AuthUser }) {
         )}
 
         <PasswordInput
-          label="Confirm New Password"
+          label={t("settings.confirmNewPassword")}
           value={form.confirm}
           onChange={(v) => setForm((p) => ({ ...p, confirm: v }))}
           show={showNext}
@@ -663,8 +753,8 @@ function AccountTab({ user }: { user: AuthUser }) {
         {form.confirm && form.next && (
           <div className={cn("flex items-center gap-2 text-xs font-semibold", form.next === form.confirm ? "text-emerald-600" : "text-red-500")}>
             {form.next === form.confirm
-              ? <><CheckCircle2 className="h-3.5 w-3.5" /> Passwords match</>
-              : <><X className="h-3.5 w-3.5" /> Passwords don't match</>
+              ? <><CheckCircle2 className="h-3.5 w-3.5" /> {t("settings.passwordsMatch")}</>
+              : <><X className="h-3.5 w-3.5" /> {t("settings.passwordsDontMatch")}</>
             }
           </div>
         )}
@@ -676,7 +766,7 @@ function AccountTab({ user }: { user: AuthUser }) {
         >
           {changePassword.isPending
             ? <span className="h-4 w-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
-            : <><KeyRound className="h-4 w-4" /> Update Password</>
+            : <><KeyRound className="h-4 w-4" /> {t("settings.updatePassword")}</>
           }
         </button>
       </SectionCard>
@@ -738,19 +828,20 @@ function SaveButton({ onClick, isPending, label = "Save Changes" }: {
 // ─── Main Settings View ───────────────────────────────────────────────────────
 
 export function SettingsView({ user }: { user: AuthUser }) {
+  const { t } = useTranslation();
   const [tab, setTab] = useState<SettingsTab>("shop");
 
   return (
     <div className="flex flex-col gap-6 max-w-2xl">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-black text-slate-900 tracking-tight">Settings</h1>
-        <p className="text-sm text-slate-400 mt-0.5">Configure your shop, currency, and team</p>
+        <h1 className="text-2xl font-black text-slate-900 tracking-tight">{t("settings.title")}</h1>
+        <p className="text-sm text-slate-400 mt-0.5">{t("settings.subtitle")}</p>
       </div>
 
       {/* Tab bar */}
       <div className="flex gap-1 bg-slate-100 rounded-xl p-1 w-fit overflow-x-auto [scrollbar-width:none]">
-        {TABS.map(({ key, label, Icon }) => (
+        {TABS.map(({ key, labelKey, Icon }) => (
           <button
             key={key}
             onClick={() => setTab(key)}
@@ -762,7 +853,7 @@ export function SettingsView({ user }: { user: AuthUser }) {
             )}
           >
             <Icon className="h-3.5 w-3.5" />
-            {label}
+            {t(labelKey)}
           </button>
         ))}
       </div>
@@ -771,6 +862,7 @@ export function SettingsView({ user }: { user: AuthUser }) {
       <div>
         {tab === "shop"     && <ShopTab />}
         {tab === "currency" && <CurrencyTab />}
+        {tab === "language" && <LanguageTab />}
         {tab === "team"     && <TeamTab currentUser={user} />}
         {tab === "account"  && <AccountTab user={user} />}
       </div>

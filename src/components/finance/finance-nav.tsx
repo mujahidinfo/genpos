@@ -3,17 +3,19 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LayoutDashboard, Receipt, Users, Target, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useTranslation, type TranslationKey } from "@/lib/i18n/language-context";
 
 const items = [
-  { label: "Overview", href: "/finance", icon: LayoutDashboard, exact: true },
-  { label: "Expenses", href: "/finance/expenses", icon: Receipt, exact: false },
-  { label: "Employees", href: "/finance/employees", icon: Users, exact: false },
-  { label: "Budget", href: "/finance/budget", icon: Target, exact: false },
-  { label: "Reports", href: "/finance/reports", icon: FileText, exact: false },
-] as const;
+  { labelKey: "finance.navOverview", href: "/finance", icon: LayoutDashboard, exact: true },
+  { labelKey: "finance.navExpenses", href: "/finance/expenses", icon: Receipt, exact: false },
+  { labelKey: "finance.navEmployees", href: "/finance/employees", icon: Users, exact: false },
+  { labelKey: "finance.navBudget", href: "/finance/budget", icon: Target, exact: false },
+  { labelKey: "finance.navReports", href: "/finance/reports", icon: FileText, exact: false },
+] as const satisfies readonly { labelKey: TranslationKey; href: string; icon: React.ElementType; exact: boolean }[];
 
 export function FinanceNav() {
   const pathname = usePathname();
+  const { t } = useTranslation();
   return (
     <div className="flex gap-0.5 border-b border-slate-200 mb-6 overflow-x-auto">
       {items.map((item) => {
@@ -33,7 +35,7 @@ export function FinanceNav() {
             )}
           >
             <Icon className="h-4 w-4" />
-            {item.label}
+            {t(item.labelKey)}
           </Link>
         );
       })}

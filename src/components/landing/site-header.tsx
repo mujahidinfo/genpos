@@ -4,14 +4,17 @@ import { useState } from "react";
 import Link from "next/link";
 import { Menu, Store, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useTranslation, type TranslationKey } from "@/lib/i18n/language-context";
+import { LanguageSwitcher } from "./language-switcher";
 
-const navLinks = [
-  { href: "#features", label: "Features" },
-  { href: "#how-it-works", label: "How it works" },
-  { href: "#faq", label: "FAQ" },
+const navLinks: { href: string; labelKey: TranslationKey }[] = [
+  { href: "#features", labelKey: "landing.navFeatures" },
+  { href: "#how-it-works", labelKey: "landing.navHowItWorks" },
+  { href: "#faq", labelKey: "landing.navFaq" },
 ];
 
 export function SiteHeader() {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
 
   return (
@@ -31,27 +34,31 @@ export function SiteHeader() {
               href={link.href}
               className="text-sm font-medium text-slate-600 transition-colors hover:text-slate-900"
             >
-              {link.label}
+              {t(link.labelKey)}
             </a>
           ))}
         </nav>
 
         <div className="hidden items-center gap-3 md:flex">
+          <LanguageSwitcher />
           <Link href="/login">
-            <Button variant="ghost">Sign in</Button>
+            <Button variant="ghost">{t("landing.signIn")}</Button>
           </Link>
           <Link href="/login">
-            <Button>Get Started</Button>
+            <Button>{t("landing.getStarted")}</Button>
           </Link>
         </div>
 
-        <button
-          className="-mr-2 p-2 text-slate-600 md:hidden"
-          onClick={() => setOpen((v) => !v)}
-          aria-label="Toggle menu"
-        >
-          {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-        </button>
+        <div className="flex items-center gap-1.5 md:hidden">
+          <LanguageSwitcher className="px-2.5 py-1.5" />
+          <button
+            className="-mr-2 p-2 text-slate-600"
+            onClick={() => setOpen((v) => !v)}
+            aria-label="Toggle menu"
+          >
+            {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          </button>
+        </div>
       </div>
 
       {open && (
@@ -64,17 +71,17 @@ export function SiteHeader() {
                 onClick={() => setOpen(false)}
                 className="text-sm font-medium text-slate-600"
               >
-                {link.label}
+                {t(link.labelKey)}
               </a>
             ))}
             <div className="flex flex-col gap-2 pt-2">
               <Link href="/login" onClick={() => setOpen(false)}>
                 <Button variant="outline" className="w-full">
-                  Sign in
+                  {t("landing.signIn")}
                 </Button>
               </Link>
               <Link href="/login" onClick={() => setOpen(false)}>
-                <Button className="w-full">Get Started</Button>
+                <Button className="w-full">{t("landing.getStarted")}</Button>
               </Link>
             </div>
           </nav>

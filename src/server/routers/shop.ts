@@ -17,6 +17,7 @@ export const shopRouter = router({
         phone: z.string().optional(),
         email: z.string().email().optional(),
         currency: z.string().default("USD"),
+        language: z.string().default("en"),
         taxRate: z.number().min(0).max(100).default(0),
         taxName: z.string().default("Tax"),
       })
@@ -27,5 +28,20 @@ export const shopRouter = router({
         return prisma.shop.update({ where: { id: existing.id }, data: input });
       }
       return prisma.shop.create({ data: input });
+    }),
+
+  setLanguage: adminProcedure
+    .input(z.object({ language: z.enum(["en", "bn"]) }))
+    .mutation(async ({ input }) => {
+      const existing = await prisma.shop.findFirst();
+      if (existing) {
+        return prisma.shop.update({
+          where: { id: existing.id },
+          data: { language: input.language },
+        });
+      }
+      return prisma.shop.create({
+        data: { name: "My Shop", language: input.language },
+      });
     }),
 });

@@ -8,17 +8,18 @@ import {
 import { cn } from "@/lib/utils";
 import type { AuthUser } from "@/lib/auth";
 import { useState } from "react";
+import { useTranslation, type TranslationKey } from "@/lib/i18n/language-context";
 
 const navItems = [
-  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, roles: ["ADMIN", "CASHIER", "INVENTORY_MANAGER"] },
-  { label: "Sales / POS", href: "/sales", icon: Receipt, roles: ["ADMIN", "CASHIER"] },
-  { label: "Orders", href: "/orders", icon: ShoppingCart, roles: ["ADMIN", "CASHIER", "INVENTORY_MANAGER"] },
-  { label: "Inventory", href: "/inventory", icon: Package, roles: ["ADMIN", "INVENTORY_MANAGER"] },
-  { label: "Customers", href: "/customers", icon: Users, roles: ["ADMIN", "CASHIER"] },
-  { label: "Analytics", href: "/analytics", icon: BarChart3, roles: ["ADMIN"] },
-  { label: "Finance", href: "/finance", icon: Wallet, roles: ["ADMIN"] },
-  { label: "Settings", href: "/settings", icon: Settings, roles: ["ADMIN"] },
-] as const;
+  { labelKey: "nav.dashboard", href: "/dashboard", icon: LayoutDashboard, roles: ["ADMIN", "CASHIER", "INVENTORY_MANAGER"] },
+  { labelKey: "nav.sales", href: "/sales", icon: Receipt, roles: ["ADMIN", "CASHIER"] },
+  { labelKey: "nav.orders", href: "/orders", icon: ShoppingCart, roles: ["ADMIN", "CASHIER", "INVENTORY_MANAGER"] },
+  { labelKey: "nav.inventory", href: "/inventory", icon: Package, roles: ["ADMIN", "INVENTORY_MANAGER"] },
+  { labelKey: "nav.customers", href: "/customers", icon: Users, roles: ["ADMIN", "CASHIER"] },
+  { labelKey: "nav.analytics", href: "/analytics", icon: BarChart3, roles: ["ADMIN"] },
+  { labelKey: "nav.finance", href: "/finance", icon: Wallet, roles: ["ADMIN"] },
+  { labelKey: "nav.settings", href: "/settings", icon: Settings, roles: ["ADMIN"] },
+] as const satisfies readonly { labelKey: TranslationKey; href: string; icon: React.ElementType; roles: readonly string[] }[];
 
 type NavItem = (typeof navItems)[number];
 
@@ -33,6 +34,7 @@ interface NavContentProps {
 }
 
 function NavContent({ items, pathname, onNavigate }: NavContentProps) {
+  const { t } = useTranslation();
   return (
     <nav className="flex flex-col gap-0.5 px-3 py-4 flex-1">
       {items.map((item) => {
@@ -51,7 +53,7 @@ function NavContent({ items, pathname, onNavigate }: NavContentProps) {
             )}
           >
             <Icon className="h-4 w-4 shrink-0" />
-            {item.label}
+            {t(item.labelKey)}
           </Link>
         );
       })}
@@ -65,6 +67,8 @@ interface UserSectionProps {
 }
 
 function UserSection({ user, initials }: UserSectionProps) {
+  const { t } = useTranslation();
+  const roleKey = `roles.${user.role}` as TranslationKey;
   return (
     <div className="px-3 pb-4 pt-2 border-t border-slate-100">
       <div className="flex items-center gap-3 px-2 py-2.5 rounded-xl">
@@ -73,8 +77,8 @@ function UserSection({ user, initials }: UserSectionProps) {
         </div>
         <div className="min-w-0">
           <p className="text-sm font-semibold text-slate-800 truncate leading-none">{user.name}</p>
-          <p className="text-xs text-slate-400 capitalize mt-0.5 truncate">
-            {user.role.toLowerCase().replace("_", " ")}
+          <p className="text-xs text-slate-400 mt-0.5 truncate">
+            {t(roleKey)}
           </p>
         </div>
       </div>
@@ -84,6 +88,7 @@ function UserSection({ user, initials }: UserSectionProps) {
 
 export function Sidebar({ user }: SidebarProps) {
   const pathname = usePathname();
+  const { t } = useTranslation();
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const visibleItems = navItems.filter((item) =>
@@ -105,8 +110,8 @@ export function Sidebar({ user }: SidebarProps) {
             <Store className="w-4 h-4 text-white" />
           </div>
           <div className="min-w-0">
-            <p className="font-bold text-slate-900 leading-none">GenPOS</p>
-            <p className="text-xs text-slate-400 mt-0.5">Point of Sale</p>
+            <p className="font-bold text-slate-900 leading-none">{t("nav.appName")}</p>
+            <p className="text-xs text-slate-400 mt-0.5">{t("nav.tagline")}</p>
           </div>
         </div>
         <NavContent items={visibleItems} pathname={pathname} onNavigate={() => {}} />
@@ -129,7 +134,7 @@ export function Sidebar({ user }: SidebarProps) {
                 <div className="w-7 h-7 rounded-xl bg-indigo-600 flex items-center justify-center">
                   <Store className="w-3.5 h-3.5 text-white" />
                 </div>
-                <p className="font-bold text-slate-900">GenPOS</p>
+                <p className="font-bold text-slate-900">{t("nav.appName")}</p>
               </div>
               <NavContent
                 items={visibleItems}

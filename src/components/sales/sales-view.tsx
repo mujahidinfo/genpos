@@ -4,6 +4,8 @@ import { useState, useCallback } from "react";
 import { trpc } from "@/lib/trpc/client";
 import { cn } from "@/lib/utils";
 import { useFormatCurrency } from "@/lib/currency-context";
+import { useTranslation, type TranslationKey } from "@/lib/i18n/language-context";
+import type { Language } from "@/lib/i18n/translations";
 import {
   Search, Plus, Minus, Trash2, Receipt, ShoppingCart,
   Banknote, CreditCard, Smartphone, Building2, Tag, X,
@@ -32,11 +34,11 @@ type ShopData = { name: string; taxRate: number; taxName: string } | null | unde
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-const PAYMENT_OPTIONS: { value: PaymentMethod; label: string; icon: React.ElementType }[] = [
-  { value: "CASH", label: "Cash", icon: Banknote },
-  { value: "CARD", label: "Card", icon: CreditCard },
-  { value: "MOBILE_MONEY", label: "Mobile Money", icon: Smartphone },
-  { value: "BANK_TRANSFER", label: "Bank", icon: Building2 },
+const PAYMENT_OPTIONS: { value: PaymentMethod; labelKey: TranslationKey; icon: React.ElementType }[] = [
+  { value: "CASH", labelKey: "sales.payCash", icon: Banknote },
+  { value: "CARD", labelKey: "sales.payCard", icon: CreditCard },
+  { value: "MOBILE_MONEY", labelKey: "sales.payMobile", icon: Smartphone },
+  { value: "BANK_TRANSFER", labelKey: "sales.payBank", icon: Building2 },
 ];
 
 // ─── Cart Content (shared between desktop panel & mobile sheet) ───────────────
@@ -84,6 +86,7 @@ function CartContent({
   onCustomerPhoneChange, onCustomerNameChange, onClearCustomer,
 }: CartContentProps) {
   const formatCurrency = useFormatCurrency();
+  const { t } = useTranslation();
   return (
     <div className="flex flex-col h-full min-h-0">
       {/* Header */}
@@ -93,9 +96,13 @@ function CartContent({
             <ShoppingCart className="h-4 w-4 text-indigo-600" />
           </div>
           <div>
-            <p className="text-sm font-bold text-slate-900 leading-none">Current Sale</p>
+            <p className="text-sm font-bold text-slate-900 leading-none">{t("sales.currentSale")}</p>
             <p className="text-xs text-slate-400 mt-0.5">
-              {totalItems > 0 ? `${totalItems} item${totalItems !== 1 ? "s" : ""}` : "Empty"}
+              {totalItems > 0
+                ? (totalItems !== 1
+                    ? t("sales.itemCountPlural", { count: totalItems })
+                    : t("sales.itemCount", { count: totalItems }))
+                : t("sales.empty")}
             </p>
           </div>
         </div>
@@ -104,7 +111,7 @@ function CartContent({
             onClick={onClearCart}
             className="text-xs text-slate-400 hover:text-red-500 transition-colors px-2.5 py-1.5 rounded-lg hover:bg-red-50 font-medium"
           >
-            Clear
+            {t("sales.clear")}
           </button>
         )}
       </div>
@@ -116,8 +123,8 @@ function CartContent({
             <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center mb-4">
               <ShoppingCart className="h-7 w-7 text-slate-200" />
             </div>
-            <p className="text-sm font-semibold text-slate-400">Cart is empty</p>
-            <p className="text-xs text-slate-300 mt-1.5">Tap any product to add it</p>
+            <p className="text-sm font-semibold text-slate-400">{t("sales.cartEmpty")}</p>
+            <p className="text-xs text-slate-300 mt-1.5">{t("sales.tapToAdd")}</p>
           </div>
         ) : (
           <div className="space-y-2">
@@ -132,7 +139,7 @@ function CartContent({
                 <div className="flex items-center gap-1.5 shrink-0">
                   <button
                     onClick={() => onUpdateQty(idx, -1)}
-                    aria-label="Decrease quantity"
+                    aria-label={t("sales.decreaseQty")}
                     className="w-8 h-8 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:border-red-200 hover:text-red-500 active:scale-95 transition-all"
                   >
                     <Minus className="h-3 w-3" />
@@ -142,7 +149,7 @@ function CartContent({
                   </span>
                   <button
                     onClick={() => onUpdateQty(idx, 1)}
-                    aria-label="Increase quantity"
+                    aria-label={t("sales.increaseQty")}
                     className="w-8 h-8 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:border-indigo-300 hover:text-indigo-600 active:scale-95 transition-all"
                   >
                     <Plus className="h-3 w-3" />
@@ -155,7 +162,7 @@ function CartContent({
 
                 <button
                   onClick={() => onRemoveItem(idx)}
-                  aria-label="Remove item"
+                  aria-label={t("sales.removeItem")}
                   className="w-8 h-8 rounded-xl flex items-center justify-center text-slate-300 hover:text-red-500 hover:bg-red-50 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-all shrink-0"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
@@ -177,20 +184,20 @@ function CartContent({
               className="flex items-center gap-2 text-xs font-semibold text-slate-400 hover:text-indigo-600 transition-colors py-1 group"
             >
               <Tag className="h-3.5 w-3.5 group-hover:text-indigo-500 transition-colors" />
-              Add discount
+              {t("sales.addDiscount")}
             </button>
           ) : (
             <div className="bg-indigo-50 rounded-xl p-3 space-y-2.5">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-indigo-700 flex items-center gap-1.5">
                   <Tag className="h-3 w-3" />
-                  Discount
+                  {t("common.discount")}
                 </span>
                 <button
                   onClick={() => { onSetShowDiscount(false); onSetDiscountType("none"); onSetDiscountValue(0); }}
                   className="text-xs text-indigo-400 hover:text-indigo-700 font-semibold transition-colors"
                 >
-                  Remove
+                  {t("common.remove")}
                 </button>
               </div>
               <div className="flex gap-2">
@@ -228,15 +235,15 @@ function CartContent({
           <div className="space-y-2">
             <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
               <User className="h-3 w-3" />
-              Customer
-              <span className="text-slate-300 font-normal normal-case tracking-normal">— optional</span>
+              {t("sales.customer")}
+              <span className="text-slate-300 font-normal normal-case tracking-normal">{t("sales.customerOptional")}</span>
             </span>
             <div className="relative">
               <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
               <input
                 type="tel"
                 inputMode="numeric"
-                placeholder="Phone number..."
+                placeholder={t("sales.phonePlaceholder")}
                 value={customerPhone}
                 onChange={(e) => onCustomerPhoneChange(e.target.value)}
                 className="w-full h-10 pl-9 pr-8 bg-slate-50 border border-slate-200 rounded-xl text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors"
@@ -253,7 +260,7 @@ function CartContent({
                 <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
                 <div className="min-w-0">
                   <p className="text-xs font-bold text-emerald-800 truncate">{foundCustomer.name}</p>
-                  <p className="text-[10px] text-emerald-600">Existing customer</p>
+                  <p className="text-[10px] text-emerald-600">{t("sales.existingCustomer")}</p>
                 </div>
               </div>
             )}
@@ -261,11 +268,11 @@ function CartContent({
             {customerPhone.length >= 4 && !foundCustomer && (
               <div className="space-y-1.5">
                 <p className="text-[10px] font-bold text-amber-600 flex items-center gap-1">
-                  <UserPlus className="h-3 w-3" /> New customer — enter name
+                  <UserPlus className="h-3 w-3" /> {t("sales.newCustomerEnterName")}
                 </p>
                 <input
                   type="text"
-                  placeholder="Customer name..."
+                  placeholder={t("sales.customerNamePlaceholder")}
                   value={customerName}
                   onChange={(e) => onCustomerNameChange(e.target.value)}
                   className="w-full h-10 px-3 bg-amber-50 border border-amber-200 rounded-xl text-sm placeholder:text-amber-300 focus:outline-none focus:ring-2 focus:ring-amber-400 transition-colors"
@@ -276,9 +283,9 @@ function CartContent({
 
           {/* Payment method */}
           <div className="space-y-2">
-            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Payment method</span>
+            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">{t("sales.paymentMethod")}</span>
             <div className="grid grid-cols-2 gap-2">
-              {PAYMENT_OPTIONS.map(({ value, label, icon: Icon }) => (
+              {PAYMENT_OPTIONS.map(({ value, labelKey, icon: Icon }) => (
                 <button
                   key={value}
                   onClick={() => onSetPaymentMethod(value)}
@@ -290,7 +297,7 @@ function CartContent({
                   )}
                 >
                   <Icon className="h-4 w-4 shrink-0" />
-                  <span className="truncate text-xs">{label}</span>
+                  <span className="truncate text-xs">{t(labelKey)}</span>
                 </button>
               ))}
             </div>
@@ -299,13 +306,13 @@ function CartContent({
           {/* Order totals */}
           <div className="space-y-1.5 border-t border-slate-100 pt-3">
             <div className="flex justify-between text-xs text-slate-500">
-              <span>Subtotal</span>
+              <span>{t("common.subtotal")}</span>
               <span className="tabular-nums">{formatCurrency(subtotal)}</span>
             </div>
             {discountAmt > 0 && (
               <div className="flex justify-between text-xs font-semibold text-emerald-600">
                 <span>
-                  Discount
+                  {t("common.discount")}
                   {discountType === "percentage" && ` (${discountValue}%)`}
                 </span>
                 <span className="tabular-nums">−{formatCurrency(discountAmt)}</span>
@@ -313,12 +320,12 @@ function CartContent({
             )}
             {taxRate > 0 && (
               <div className="flex justify-between text-xs text-slate-500">
-                <span>{shop?.taxName ?? "Tax"} ({taxRate}%)</span>
+                <span>{shop?.taxName ?? t("common.tax")} ({taxRate}%)</span>
                 <span className="tabular-nums">{formatCurrency(taxAmt)}</span>
               </div>
             )}
             <div className="flex justify-between items-baseline pt-2.5 border-t border-slate-100">
-              <span className="text-sm font-bold text-slate-600">Total</span>
+              <span className="text-sm font-bold text-slate-600">{t("common.total")}</span>
               <span className="text-2xl font-black text-slate-900 tabular-nums tracking-tight">
                 {formatCurrency(total)}
               </span>
@@ -343,17 +350,17 @@ function CartContent({
             {isSuccess ? (
               <>
                 <CheckCircle2 className="h-5 w-5" />
-                Sale Complete!
+                {t("sales.saleComplete")}
               </>
             ) : isPending ? (
               <>
                 <span className="h-4 w-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
-                Processing...
+                {t("sales.processing")}
               </>
             ) : (
               <>
                 <Receipt className="h-4 w-4" />
-                Review & Charge {formatCurrency(total)}
+                {t("sales.reviewCharge", { total: formatCurrency(total) })}
               </>
             )}
           </button>
@@ -365,11 +372,11 @@ function CartContent({
 
 // ─── Invoice Modal ────────────────────────────────────────────────────────────
 
-const PAYMENT_LABELS: Record<PaymentMethod, string> = {
-  CASH: "Cash",
-  CARD: "Card",
-  MOBILE_MONEY: "Mobile Money",
-  BANK_TRANSFER: "Bank Transfer",
+const PAYMENT_LABEL_KEYS: Record<PaymentMethod, TranslationKey> = {
+  CASH: "sales.payCash",
+  CARD: "sales.payCard",
+  MOBILE_MONEY: "sales.payMobile",
+  BANK_TRANSFER: "sales.payBankTransfer",
 };
 
 const PAYMENT_ICONS: Record<PaymentMethod, React.ElementType> = {
@@ -405,15 +412,17 @@ function InvoiceModal({
   customerName, customerPhone,
 }: InvoiceModalProps) {
   const formatCurrency = useFormatCurrency();
+  const { t, language } = useTranslation();
+  const locale = language === "bn" ? "bn-BD" : "en-US";
   const now = new Date();
-  const dateStr = now.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
-  const timeStr = now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+  const dateStr = now.toLocaleDateString(locale, { year: "numeric", month: "long", day: "numeric" });
+  const timeStr = now.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" });
   const PayIcon = PAYMENT_ICONS[paymentMethod];
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="p-0 gap-0 max-w-md w-full border-0 shadow-2xl overflow-hidden rounded-2xl sm:rounded-2xl">
-        <DialogTitle className="sr-only">Invoice Preview</DialogTitle>
+        <DialogTitle className="sr-only">{t("sales.invoicePreview")}</DialogTitle>
 
         {/* ── Invoice paper ── */}
         <div className="bg-white max-h-[90dvh] overflow-y-auto">
@@ -429,13 +438,13 @@ function InvoiceModal({
                   <p className="font-black text-base leading-tight">
                     {shop?.name ?? "GenPOS"}
                   </p>
-                  <p className="text-white/50 text-xs mt-0.5">Invoice Preview</p>
+                  <p className="text-white/50 text-xs mt-0.5">{t("sales.invoicePreview")}</p>
                 </div>
               </div>
               <div className="text-right shrink-0">
                 <div className="inline-flex items-center gap-1.5 bg-white/10 rounded-lg px-2.5 py-1">
                   <Receipt className="h-3 w-3 text-white/70" />
-                  <span className="text-[11px] font-bold text-white/80 uppercase tracking-wide">Draft</span>
+                  <span className="text-[11px] font-bold text-white/80 uppercase tracking-wide">{t("sales.draft")}</span>
                 </div>
               </div>
             </div>
@@ -463,13 +472,13 @@ function InvoiceModal({
 
             {/* Items table */}
             <div>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Items</p>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">{t("sales.items")}</p>
               <div className="space-y-0">
                 {/* Table header */}
                 <div className="grid grid-cols-[1fr_auto_auto] gap-x-4 pb-2 border-b border-slate-100">
-                  <span className="text-[11px] font-semibold text-slate-400">Product</span>
-                  <span className="text-[11px] font-semibold text-slate-400 text-center">Qty</span>
-                  <span className="text-[11px] font-semibold text-slate-400 text-right">Amount</span>
+                  <span className="text-[11px] font-semibold text-slate-400">{t("sales.product")}</span>
+                  <span className="text-[11px] font-semibold text-slate-400 text-center">{t("sales.qty")}</span>
+                  <span className="text-[11px] font-semibold text-slate-400 text-right">{t("common.amount")}</span>
                 </div>
 
                 {/* Rows */}
@@ -480,7 +489,7 @@ function InvoiceModal({
                   >
                     <div className="min-w-0">
                       <p className="text-sm font-semibold text-slate-800 truncate">{item.name}</p>
-                      <p className="text-xs text-slate-400 tabular-nums">{formatCurrency(item.price)} each</p>
+                      <p className="text-xs text-slate-400 tabular-nums">{formatCurrency(item.price)} {t("sales.each")}</p>
                     </div>
                     <div className="flex items-center">
                       <span className="text-sm font-bold text-slate-600 tabular-nums w-8 text-center">
@@ -500,28 +509,28 @@ function InvoiceModal({
             {/* Totals */}
             <div className="bg-slate-50 rounded-xl p-4 space-y-2">
               <div className="flex justify-between text-sm text-slate-500">
-                <span>Subtotal</span>
+                <span>{t("common.subtotal")}</span>
                 <span className="tabular-nums">{formatCurrency(subtotal)}</span>
               </div>
               {discountAmt > 0 && (
                 <div className="flex justify-between text-sm font-semibold text-emerald-600">
                   <span className="flex items-center gap-1.5">
                     <Tag className="h-3 w-3" />
-                    Discount
+                    {t("common.discount")}
                     {discountType === "percentage" && ` (${discountValue}%)`}
-                    {discountType === "fixed" && " (fixed)"}
+                    {discountType === "fixed" && ` ${t("sales.discountFixed")}`}
                   </span>
                   <span className="tabular-nums">−{formatCurrency(discountAmt)}</span>
                 </div>
               )}
               {taxRate > 0 && (
                 <div className="flex justify-between text-sm text-slate-500">
-                  <span>{shop?.taxName ?? "Tax"} ({taxRate}%)</span>
+                  <span>{shop?.taxName ?? t("common.tax")} ({taxRate}%)</span>
                   <span className="tabular-nums">{formatCurrency(taxAmt)}</span>
                 </div>
               )}
               <div className="flex justify-between items-baseline pt-2 border-t border-slate-200 mt-2">
-                <span className="text-sm font-bold text-slate-700">Total due</span>
+                <span className="text-sm font-bold text-slate-700">{t("sales.totalDue")}</span>
                 <span className="text-2xl font-black text-slate-900 tabular-nums tracking-tight">
                   {formatCurrency(total)}
                 </span>
@@ -534,8 +543,8 @@ function InvoiceModal({
                 <PayIcon className="h-4 w-4 text-slate-600" />
               </div>
               <div>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Payment method</p>
-                <p className="text-sm font-bold text-slate-800 mt-0.5">{PAYMENT_LABELS[paymentMethod]}</p>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{t("sales.paymentMethod")}</p>
+                <p className="text-sm font-bold text-slate-800 mt-0.5">{t(PAYMENT_LABEL_KEYS[paymentMethod])}</p>
               </div>
             </div>
 
@@ -547,7 +556,7 @@ function InvoiceModal({
             </div>
 
             <p className="text-center text-xs text-slate-400 -mt-1">
-              Review the order above before confirming.
+              {t("sales.reviewBeforeConfirm")}
             </p>
           </div>
 
@@ -559,7 +568,7 @@ function InvoiceModal({
               className="flex-1 h-12 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-all active:scale-[0.98] flex items-center justify-center gap-2 disabled:opacity-50"
             >
               <ArrowLeft className="h-4 w-4" />
-              Back
+              {t("common.back")}
             </button>
             <button
               onClick={onConfirm}
@@ -574,12 +583,12 @@ function InvoiceModal({
               {isPending ? (
                 <>
                   <span className="h-4 w-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
-                  Processing...
+                  {t("sales.processing")}
                 </>
               ) : (
                 <>
                   <CheckCircle2 className="h-4 w-4" />
-                  Confirm & Charge {formatCurrency(total)}
+                  {t("sales.confirmCharge", { total: formatCurrency(total) })}
                 </>
               )}
             </button>
@@ -595,6 +604,7 @@ function InvoiceModal({
 export function SalesView() {
   const { toast } = useToast();
   const formatCurrency = useFormatCurrency();
+  const { t } = useTranslation();
 
   const [search, setSearch] = useState("");
   const [categoryId, setCategoryId] = useState<string | undefined>(undefined);
@@ -642,7 +652,7 @@ export function SalesView() {
       setTimeout(() => setSuccess(false), 2500);
     },
     onError: (err) =>
-      toast({ title: "Error", description: err.message, variant: "destructive" }),
+      toast({ title: t("common.error"), description: err.message, variant: "destructive" }),
   });
 
   const products = productsData?.items ?? [];
@@ -755,8 +765,8 @@ export function SalesView() {
 
         {/* Page title */}
         <div className="mb-5 shrink-0">
-          <h1 className="text-2xl font-black text-slate-900 tracking-tight">Point of Sale</h1>
-          <p className="text-sm text-slate-400 mt-0.5">Tap any product to add it to the cart</p>
+          <h1 className="text-2xl font-black text-slate-900 tracking-tight">{t("sales.pos")}</h1>
+          <p className="text-sm text-slate-400 mt-0.5">{t("sales.posSubtitle")}</p>
         </div>
 
         {/* Search bar */}
@@ -765,7 +775,7 @@ export function SalesView() {
           <input
             type="search"
             inputMode="search"
-            placeholder="Search products or scan barcode..."
+            placeholder={t("sales.searchProducts")}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full h-12 pl-10 pr-10 bg-white border border-slate-200 rounded-xl text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent shadow-sm"
@@ -773,7 +783,7 @@ export function SalesView() {
           {search && (
             <button
               onClick={() => setSearch("")}
-              aria-label="Clear search"
+              aria-label={t("sales.clearSearch")}
               className="absolute right-3 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 hover:bg-slate-200 transition-colors"
             >
               <X className="h-3.5 w-3.5" />
@@ -793,7 +803,7 @@ export function SalesView() {
                   : "bg-white border border-slate-200 text-slate-500 hover:border-slate-300 hover:text-slate-700"
               )}
             >
-              All
+              {t("common.all")}
             </button>
             {(categories ?? []).map((cat) => (
               <button
@@ -828,7 +838,7 @@ export function SalesView() {
                   key={product.id}
                   onClick={() => !outOfStock && addToCart(product)}
                   disabled={outOfStock}
-                  aria-label={`Add ${product.name} to cart`}
+                  aria-label={t("sales.addToCart", { name: product.name })}
                   className={cn(
                     "relative text-left p-4 rounded-2xl border bg-white transition-all duration-150",
                     outOfStock
@@ -880,7 +890,7 @@ export function SalesView() {
                           ? "bg-amber-50 text-amber-600"
                           : "bg-emerald-50 text-emerald-600"
                     )}>
-                      {outOfStock ? "Out" : `${totalStock}`}
+                      {outOfStock ? t("sales.out") : `${totalStock}`}
                     </span>
                   </div>
                 </button>
@@ -892,13 +902,13 @@ export function SalesView() {
                 <div className="w-16 h-16 bg-white rounded-2xl border border-slate-100 shadow-sm flex items-center justify-center mb-4">
                   <Package className="h-7 w-7 text-slate-200" />
                 </div>
-                <p className="text-sm font-semibold text-slate-400">No products found</p>
+                <p className="text-sm font-semibold text-slate-400">{t("sales.noProducts")}</p>
                 {search && (
                   <button
                     onClick={() => setSearch("")}
                     className="text-xs text-indigo-600 mt-2.5 hover:underline font-semibold"
                   >
-                    Clear search
+                    {t("sales.clearSearch")}
                   </button>
                 )}
               </div>
@@ -935,7 +945,9 @@ export function SalesView() {
               )}
             </div>
             <span className="font-bold text-sm">
-              {totalItems} item{totalItems !== 1 ? "s" : ""} in cart
+              {totalItems !== 1
+                ? t("sales.itemsInCartPlural", { count: totalItems })
+                : t("sales.itemsInCart", { count: totalItems })}
             </span>
           </div>
           <div className="flex items-center gap-1.5">
@@ -980,7 +992,7 @@ export function SalesView() {
             <div className="flex justify-center pt-3 pb-1 shrink-0">
               <button
                 onClick={() => setCartOpen(false)}
-                aria-label="Close cart"
+                aria-label={t("sales.closeCart")}
                 className="w-10 h-1 bg-slate-200 rounded-full hover:bg-slate-300 transition-colors"
               />
             </div>
