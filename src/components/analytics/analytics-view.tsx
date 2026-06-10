@@ -4,6 +4,7 @@ import { trpc } from "@/lib/trpc/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useFormatCurrency } from "@/lib/currency-context";
+import { useTranslation, type TranslationKey } from "@/lib/i18n/language-context";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -28,14 +29,15 @@ const COLORS = [
   "#8b5cf6",
   "#06b6d4",
 ];
-const PERIODS = [
-  { label: "7 days", value: 7 },
-  { label: "30 days", value: 30 },
-  { label: "90 days", value: 90 },
+const PERIODS: { labelKey: TranslationKey; value: number }[] = [
+  { labelKey: "analytics.days7", value: 7 },
+  { labelKey: "analytics.days30", value: 30 },
+  { labelKey: "analytics.days90", value: 90 },
 ];
 
 export function AnalyticsView() {
   const formatCurrency = useFormatCurrency();
+  const { t } = useTranslation();
   const [days, setDays] = useState(30);
 
   const { data: overview } = trpc.analytics.overview.useQuery({ days });
@@ -52,9 +54,9 @@ export function AnalyticsView() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Analytics</h1>
+          <h1 className="text-2xl font-bold tracking-tight">{t("analytics.title")}</h1>
           <p className="text-muted-foreground">
-            Sales trends and performance insights
+            {t("analytics.subtitle")}
           </p>
         </div>
         <div className="flex gap-1 p-1 bg-muted rounded-lg">
@@ -64,7 +66,7 @@ export function AnalyticsView() {
               onClick={() => setDays(p.value)}
               className={`px-3 py-1.5 text-sm rounded-md font-medium transition-colors ${days === p.value ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
             >
-              {p.label}
+              {t(p.labelKey)}
             </button>
           ))}
         </div>
@@ -74,15 +76,15 @@ export function AnalyticsView() {
       <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
         {[
           {
-            label: "Revenue",
+            label: t("analytics.kpiRevenue"),
             value: formatCurrency(overview?.totalRevenue ?? 0),
           },
           {
-            label: "Fulfilled Orders",
+            label: t("analytics.kpiFulfilled"),
             value: String(overview?.fulfilledOrders ?? 0),
           },
-          { label: "Total Orders", value: String(overview?.totalOrders ?? 0) },
-          { label: "Customers", value: String(overview?.totalCustomers ?? 0) },
+          { label: t("analytics.kpiTotalOrders"), value: String(overview?.totalOrders ?? 0) },
+          { label: t("analytics.kpiCustomers"), value: String(overview?.totalCustomers ?? 0) },
         ].map((kpi) => (
           <Card key={kpi.label}>
             <CardHeader className="pb-1">
@@ -99,15 +101,15 @@ export function AnalyticsView() {
 
       <Tabs defaultValue="revenue">
         <TabsList>
-          <TabsTrigger value="revenue">Revenue Trend</TabsTrigger>
-          <TabsTrigger value="products">Top Products</TabsTrigger>
-          <TabsTrigger value="categories">Categories</TabsTrigger>
+          <TabsTrigger value="revenue">{t("analytics.tabRevenue")}</TabsTrigger>
+          <TabsTrigger value="products">{t("analytics.tabProducts")}</TabsTrigger>
+          <TabsTrigger value="categories">{t("analytics.tabCategories")}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="revenue" className="mt-4">
           <Card>
             <CardHeader>
-              <CardTitle>Revenue Over Time</CardTitle>
+              <CardTitle>{t("analytics.revenueOverTime")}</CardTitle>
             </CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={300}>
@@ -144,7 +146,7 @@ export function AnalyticsView() {
         <TabsContent value="products" className="mt-4">
           <Card>
             <CardHeader>
-              <CardTitle>Top Selling Products</CardTitle>
+              <CardTitle>{t("analytics.topSelling")}</CardTitle>
             </CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={300}>
@@ -179,7 +181,7 @@ export function AnalyticsView() {
         <TabsContent value="categories" className="mt-4">
           <Card>
             <CardHeader>
-              <CardTitle>Revenue by Category</CardTitle>
+              <CardTitle>{t("analytics.revenueByCategory")}</CardTitle>
             </CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={300}>

@@ -6,21 +6,24 @@ import { HowItWorksSection } from "@/components/landing/how-it-works-section";
 import { BenefitsSection } from "@/components/landing/benefits-section";
 import { FaqSection } from "@/components/landing/faq-section";
 import { CtaSection, SiteFooter } from "@/components/landing/cta-footer";
+import { LandingLanguageProvider } from "@/lib/i18n/landing-language-context";
 
 export function LandingPage() {
   return (
-    <div className="min-h-screen bg-white">
-      <SiteHeader />
-      <main>
-        <HeroSection />
-        <ProblemSection />
-        <FeaturesSection />
-        <HowItWorksSection />
-        <BenefitsSection />
-        <FaqSection />
-        <CtaSection />
-      </main>
-      <SiteFooter />
-    </div>
+    <LandingLanguageProvider>
+      <div className="min-h-screen bg-white">
+        <SiteHeader />
+        <main>
+          <HeroSection />
+          <ProblemSection />
+          <FeaturesSection />
+          <HowItWorksSection />
+          <BenefitsSection />
+          <FaqSection />
+          <CtaSection />
+        </main>
+        <SiteFooter />
+      </div>
+    </LandingLanguageProvider>
   );
 }

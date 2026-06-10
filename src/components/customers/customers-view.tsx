@@ -4,6 +4,8 @@ import { useState } from "react";
 import { trpc } from "@/lib/trpc/client";
 import { cn } from "@/lib/utils";
 import { useFormatCurrency } from "@/lib/currency-context";
+import { useTranslation, type TranslationKey } from "@/lib/i18n/language-context";
+import type { Language } from "@/lib/i18n/translations";
 import {
   Search, X, Plus, Users, Phone, Mail, MapPin,
   ArrowLeft, Pencil, Trash2, ShoppingBag, CheckCircle2,
@@ -29,16 +31,16 @@ const PAGE_SIZE = 20;
 
 // ─── Status badge for order ───────────────────────────────────────────────────
 
-const ORDER_STATUS: Record<string, { dot: string; label: string }> = {
-  PENDING:    { dot: "bg-amber-400",   label: "Pending"    },
-  PROCESSING: { dot: "bg-blue-400",    label: "Processing" },
-  FULFILLED:  { dot: "bg-emerald-500", label: "Fulfilled"  },
-  CANCELED:   { dot: "bg-slate-300",   label: "Canceled"   },
-  REFUNDED:   { dot: "bg-red-400",     label: "Refunded"   },
+const ORDER_STATUS: Record<string, { dot: string; labelKey: TranslationKey }> = {
+  PENDING:    { dot: "bg-amber-400",   labelKey: "orders.statusPending"    },
+  PROCESSING: { dot: "bg-blue-400",    labelKey: "orders.statusProcessing" },
+  FULFILLED:  { dot: "bg-emerald-500", labelKey: "orders.statusFulfilled"  },
+  CANCELED:   { dot: "bg-slate-300",   labelKey: "orders.statusCanceled"   },
+  REFUNDED:   { dot: "bg-red-400",     labelKey: "orders.statusRefunded"   },
 };
 
-function fmtDate(d: Date | string) {
-  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(new Date(d));
+function fmtDate(d: Date | string, language: Language) {
+  return new Intl.DateTimeFormat(language === "bn" ? "bn-BD" : "en-US", { month: "short", day: "numeric", year: "numeric" }).format(new Date(d));
 }
 
 // ─── Customer Detail Panel ────────────────────────────────────────────────────
@@ -51,11 +53,12 @@ function CustomerDetailPanel({ customerId, onClose, onEdit }: {
   const { toast } = useToast();
   const utils = trpc.useUtils();
   const formatCurrency = useFormatCurrency();
+  const { t, language } = useTranslation();
   const { data: customer, isLoading } = trpc.customers.getById.useQuery({ id: customerId });
 
   const deleteCustomer = trpc.customers.delete.useMutation({
-    onSuccess: () => { utils.customers.list.invalidate(); onClose(); toast({ title: "Customer deleted" }); },
-    onError: (e) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onSuccess: () => { utils.customers.list.invalidate(); onClose(); toast({ title: t("customers.customerDeleted") }); },
+    onError: (e) => toast({ title: t("common.error"), description: e.message, variant: "destructive" }),
   });
 
   if (isLoading) {
@@ -88,7 +91,7 @@ function CustomerDetailPanel({ customerId, onClose, onEdit }: {
         </button>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-black text-slate-900 truncate">{customer.name}</p>
-          <p className="text-xs text-slate-400">Customer since {fmtDate(customer.createdAt)}</p>
+          <p className="text-xs text-slate-400">{t("customers.customerSince", { date: fmtDate(customer.createdAt, language) })}</p>
         </div>
       </div>
 
@@ -98,41 +101,41 @@ function CustomerDetailPanel({ customerId, onClose, onEdit }: {
         <div className="grid grid-cols-2 gap-3">
           <div className="bg-slate-50 rounded-xl p-3 text-center">
             <p className="text-2xl font-black text-slate-900 tabular-nums">{orderCount}</p>
-            <p className="text-[11px] text-slate-400 font-semibold mt-0.5">Orders</p>
+            <p className="text-[11px] text-slate-400 font-semibold mt-0.5">{t("customers.orders")}</p>
           </div>
           <div className="bg-indigo-50 rounded-xl p-3 text-center">
             <p className="text-2xl font-black text-indigo-700 tabular-nums">{formatCurrency(totalSpent)}</p>
-            <p className="text-[11px] text-indigo-400 font-semibold mt-0.5">Total Spent</p>
+            <p className="text-[11px] text-indigo-400 font-semibold mt-0.5">{t("customers.totalSpent")}</p>
           </div>
         </div>
 
         {/* Contact info */}
         <div>
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Contact</p>
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">{t("customers.contact")}</p>
           <div className="space-y-2">
             {customer.phone && (
               <div className="flex items-center gap-3 px-3 py-2.5 bg-slate-50 rounded-xl">
                 <Phone className="h-3.5 w-3.5 text-slate-400 shrink-0" />
                 <span className="text-sm text-slate-700 font-semibold">{customer.phone}</span>
-                <span className="text-[10px] text-slate-400 ml-auto font-bold uppercase">Phone</span>
+                <span className="text-[10px] text-slate-400 ml-auto font-bold uppercase">{t("customers.phone")}</span>
               </div>
             )}
             {customer.email && (
               <div className="flex items-center gap-3 px-3 py-2.5 bg-slate-50 rounded-xl">
                 <Mail className="h-3.5 w-3.5 text-slate-400 shrink-0" />
                 <span className="text-sm text-slate-700 font-semibold truncate">{customer.email}</span>
-                <span className="text-[10px] text-slate-400 ml-auto font-bold uppercase shrink-0">Email</span>
+                <span className="text-[10px] text-slate-400 ml-auto font-bold uppercase shrink-0">{t("customers.email")}</span>
               </div>
             )}
             {customer.address && (
               <div className="flex items-center gap-3 px-3 py-2.5 bg-slate-50 rounded-xl">
                 <MapPin className="h-3.5 w-3.5 text-slate-400 shrink-0" />
                 <span className="text-sm text-slate-700 font-semibold truncate">{customer.address}</span>
-                <span className="text-[10px] text-slate-400 ml-auto font-bold uppercase shrink-0">Address</span>
+                <span className="text-[10px] text-slate-400 ml-auto font-bold uppercase shrink-0">{t("customers.address")}</span>
               </div>
             )}
             {!customer.phone && !customer.email && !customer.address && (
-              <p className="text-xs text-slate-400 px-3">No contact info on file</p>
+              <p className="text-xs text-slate-400 px-3">{t("customers.noContactInfo")}</p>
             )}
           </div>
         </div>
@@ -140,31 +143,34 @@ function CustomerDetailPanel({ customerId, onClose, onEdit }: {
         {/* Order history */}
         <div>
           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">
-            Recent Orders ({customer.orders.length})
+            {t("customers.recentOrders", { count: customer.orders.length })}
           </p>
           {customer.orders.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-8 bg-slate-50 rounded-xl text-center">
               <ShoppingBag className="h-6 w-6 text-slate-200 mb-2" />
-              <p className="text-xs font-semibold text-slate-400">No orders yet</p>
+              <p className="text-xs font-semibold text-slate-400">{t("customers.noOrdersYet")}</p>
             </div>
           ) : (
             <div className="space-y-2">
               {customer.orders.map((order) => {
                 const st = ORDER_STATUS[order.status] ?? ORDER_STATUS.PENDING;
+                const itemsLabel = order.items.length !== 1
+                  ? t("orders.itemCountPlural", { count: order.items.length })
+                  : t("orders.itemCount", { count: order.items.length });
                 return (
                   <div key={order.id} className="px-3 py-3 bg-white rounded-xl border border-slate-100 hover:border-slate-200 transition-colors">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <p className="text-xs font-bold text-slate-800 font-mono">{order.orderNumber}</p>
                         <p className="text-[11px] text-slate-400 mt-0.5">
-                          {fmtDate(order.createdAt)} · {order.items.length} item{order.items.length !== 1 ? "s" : ""}
+                          {t("customers.orderItems", { date: fmtDate(order.createdAt, language), items: itemsLabel })}
                         </p>
                       </div>
                       <div className="text-right shrink-0">
                         <p className="text-sm font-black text-slate-900 tabular-nums">{formatCurrency(order.total)}</p>
                         <div className="flex items-center gap-1 justify-end mt-0.5">
                           <div className={cn("w-1.5 h-1.5 rounded-full", st.dot)} />
-                          <span className="text-[10px] font-bold text-slate-500">{st.label}</span>
+                          <span className="text-[10px] font-bold text-slate-500">{t(st.labelKey)}</span>
                         </div>
                       </div>
                     </div>
@@ -182,15 +188,15 @@ function CustomerDetailPanel({ customerId, onClose, onEdit }: {
           onClick={() => onEdit(customer.id)}
           className="flex-1 h-10 flex items-center justify-center gap-2 rounded-xl border border-slate-200 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-all"
         >
-          <Pencil className="h-3.5 w-3.5" /> Edit
+          <Pencil className="h-3.5 w-3.5" /> {t("common.edit")}
         </button>
         <button
           onClick={() => {
-            if (confirm(`Delete "${customer.name}"? This cannot be undone.`)) deleteCustomer.mutate({ id: customer.id });
+            if (confirm(t("customers.deleteConfirm", { name: customer.name }))) deleteCustomer.mutate({ id: customer.id });
           }}
           disabled={deleteCustomer.isPending}
           className="h-10 w-10 flex items-center justify-center rounded-xl border border-red-100 text-red-400 hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-all disabled:opacity-40"
-          aria-label="Delete customer"
+          aria-label={t("customers.deleteCustomer")}
         >
           <Trash2 className="h-3.5 w-3.5" />
         </button>
@@ -207,6 +213,7 @@ const emptyForm: CustomerForm = { name: "", phone: "", email: "", address: "" };
 function CustomerFormPanel({ customerId, onClose }: { customerId?: string; onClose: () => void }) {
   const { toast } = useToast();
   const utils = trpc.useUtils();
+  const { t } = useTranslation();
   const isEdit = !!customerId;
 
   const { data: existing, isLoading } = trpc.customers.getById.useQuery(
@@ -227,19 +234,19 @@ function CustomerFormPanel({ customerId, onClose }: { customerId?: string; onClo
     setForm((p) => ({ ...p, [k]: e.target.value }));
 
   const createCustomer = trpc.customers.create.useMutation({
-    onSuccess: () => { utils.customers.list.invalidate(); toast({ title: "Customer added" }); onClose(); },
-    onError: (e) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onSuccess: () => { utils.customers.list.invalidate(); toast({ title: t("customers.customerAdded") }); onClose(); },
+    onError: (e) => toast({ title: t("common.error"), description: e.message, variant: "destructive" }),
   });
 
   const updateCustomer = trpc.customers.update.useMutation({
-    onSuccess: () => { utils.customers.list.invalidate(); utils.customers.getById.invalidate({ id: customerId! }); toast({ title: "Customer updated" }); onClose(); },
-    onError: (e) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onSuccess: () => { utils.customers.list.invalidate(); utils.customers.getById.invalidate({ id: customerId! }); toast({ title: t("customers.customerUpdated") }); onClose(); },
+    onError: (e) => toast({ title: t("common.error"), description: e.message, variant: "destructive" }),
   });
 
   const validate = () => {
     const errs: Partial<CustomerForm> = {};
-    if (!form.name.trim()) errs.name = "Name is required";
-    if (!form.phone.trim()) errs.phone = "Phone is required — used to identify customers";
+    if (!form.name.trim()) errs.name = t("customers.nameRequired");
+    if (!form.phone.trim()) errs.phone = t("customers.phoneRequired");
     setErrors(errs);
     return Object.keys(errs).length === 0;
   };
@@ -302,26 +309,26 @@ function CustomerFormPanel({ customerId, onClose }: { customerId?: string; onClo
           <ArrowLeft className="h-4 w-4" />
         </button>
         <div>
-          <p className="text-sm font-black text-slate-900">{isEdit ? "Edit Customer" : "New Customer"}</p>
-          <p className="text-xs text-slate-400">{isEdit ? `Editing: ${existing?.name ?? "…"}` : "Phone number is the unique ID"}</p>
+          <p className="text-sm font-black text-slate-900">{isEdit ? t("customers.editCustomer") : t("customers.newCustomer")}</p>
+          <p className="text-xs text-slate-400">{isEdit ? t("customers.editingName", { name: existing?.name ?? "…" }) : t("customers.phoneIsId")}</p>
         </div>
       </div>
 
       <div className="flex-1 overflow-y-auto min-h-0 px-5 py-5 space-y-4">
-        <Field label="Full Name *" name="name" placeholder="John Doe" />
+        <Field label={`${t("customers.fullName")} *`} name="name" placeholder="John Doe" />
         <Field
-          label="Phone Number *"
+          label={`${t("customers.phoneNumber")} *`}
           name="phone"
           type="tel"
           placeholder="+1 555 000 0000"
-          hint="Used to identify this customer across sales"
+          hint={t("customers.phoneHint")}
         />
-        <Field label="Email" name="email" type="email" placeholder="john@example.com" />
+        <Field label={t("customers.email")} name="email" type="email" placeholder="john@example.com" />
         <div>
-          <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Address</label>
+          <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">{t("customers.address")}</label>
           <textarea
             rows={2}
-            placeholder="123 Main St, City, Country"
+            placeholder={t("customers.addressPlaceholder")}
             value={form.address}
             onChange={set("address")}
             className="w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-800 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
@@ -331,14 +338,14 @@ function CustomerFormPanel({ customerId, onClose }: { customerId?: string; onClo
 
       <div className="px-5 pb-5 pt-3 border-t border-slate-100 flex gap-2 shrink-0">
         <button onClick={onClose} className="flex-1 h-12 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-all">
-          Cancel
+          {t("common.cancel")}
         </button>
         <button
           onClick={handleSubmit}
           disabled={isPending}
           className="flex-[2] h-12 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-all active:scale-[0.98] disabled:opacity-50"
         >
-          {isPending ? <span className="h-4 w-4 rounded-full border-2 border-white/30 border-t-white animate-spin" /> : <><CheckCircle2 className="h-4 w-4" /> {isEdit ? "Save Changes" : "Add Customer"}</>}
+          {isPending ? <span className="h-4 w-4 rounded-full border-2 border-white/30 border-t-white animate-spin" /> : <><CheckCircle2 className="h-4 w-4" /> {isEdit ? t("common.saveChanges") : t("customers.addCustomerBtn")}</>}
         </button>
       </div>
     </div>
@@ -349,6 +356,7 @@ function CustomerFormPanel({ customerId, onClose }: { customerId?: string; onClo
 
 export function CustomersView() {
   const formatCurrency = useFormatCurrency();
+  const { t, language } = useTranslation();
   const [search, setSearch]   = useState("");
   const [page, setPage]       = useState(1);
   const [panel, setPanel]     = useState<PanelState>({ mode: "none" });
@@ -373,16 +381,16 @@ export function CustomersView() {
       {/* ── Header ─────────────────────────────────────────────── */}
       <div className="flex items-start justify-between shrink-0 gap-4">
         <div>
-          <h1 className="text-2xl font-black text-slate-900 tracking-tight">Customers</h1>
+          <h1 className="text-2xl font-black text-slate-900 tracking-tight">{t("customers.title")}</h1>
           <p className="text-sm text-slate-400 mt-0.5">
-            {isLoading ? "Loading..." : <><span className="font-semibold text-slate-800">{totalCount}</span> customer{totalCount !== 1 ? "s" : ""}</>}
+            {isLoading ? t("common.loading") : <><span className="font-semibold text-slate-800">{totalCount}</span> {totalCount !== 1 ? t("customers.customerCountPlural") : t("customers.customerCount")}</>}
           </p>
         </div>
         <button
           onClick={() => setPanel({ mode: "add" })}
           className="flex items-center gap-2 h-10 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold shadow-sm shadow-indigo-200 transition-all active:scale-[0.97] shrink-0"
         >
-          <Plus className="h-4 w-4" /> Add Customer
+          <Plus className="h-4 w-4" /> {t("customers.addCustomer")}
         </button>
       </div>
 
@@ -390,9 +398,9 @@ export function CustomersView() {
       {!isLoading && customers.length > 0 && (
         <div className="grid grid-cols-3 gap-3 shrink-0">
           {[
-            { label: "Total",        value: customers.length,                                                           icon: Users,             color: "text-slate-900" },
-            { label: "With Orders",  value: customers.filter((c) => c._count.orders > 0).length,                       icon: ShoppingBag,       color: "text-indigo-600" },
-            { label: "New (30d)",    value: customers.filter((c) => Date.now() - new Date(c.createdAt).getTime() < 2592000000).length, icon: UserPlus, color: "text-emerald-600" },
+            { label: t("customers.statTotal"),       value: customers.length,                                                           icon: Users,             color: "text-slate-900" },
+            { label: t("customers.statWithOrders"),  value: customers.filter((c) => c._count.orders > 0).length,                       icon: ShoppingBag,       color: "text-indigo-600" },
+            { label: t("customers.statNew30d"),      value: customers.filter((c) => Date.now() - new Date(c.createdAt).getTime() < 2592000000).length, icon: UserPlus, color: "text-emerald-600" },
           ].map(({ label, value, icon: Icon, color }) => (
             <div key={label} className="bg-white border border-slate-100 rounded-2xl p-4 shadow-sm text-center">
               <div className={cn("text-2xl font-black tabular-nums", color)}>{value}</div>
@@ -410,7 +418,7 @@ export function CustomersView() {
         <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
         <input
           type="search"
-          placeholder="Search by name, phone, or email..."
+          placeholder={t("customers.searchPlaceholder")}
           value={search}
           onChange={(e) => handleSearch(e.target.value)}
           className="w-full h-11 pl-10 pr-10 bg-white border border-slate-200 rounded-xl text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm"
@@ -446,14 +454,14 @@ export function CustomersView() {
               <Users className="h-7 w-7 text-slate-200" />
             </div>
             <p className="text-sm font-semibold text-slate-400">
-              {search ? `No customers match "${search}"` : "No customers yet"}
+              {search ? t("customers.noMatch", { query: search }) : t("customers.noCustomers")}
             </p>
             {search && (
-              <button onClick={() => handleSearch("")} className="text-xs text-indigo-600 mt-2.5 hover:underline font-semibold">Clear search</button>
+              <button onClick={() => handleSearch("")} className="text-xs text-indigo-600 mt-2.5 hover:underline font-semibold">{t("customers.clearSearch")}</button>
             )}
             {!search && (
               <button onClick={() => setPanel({ mode: "add" })} className="mt-3 text-xs text-indigo-600 font-bold hover:underline flex items-center gap-1">
-                <Plus className="h-3 w-3" /> Add your first customer
+                <Plus className="h-3 w-3" /> {t("customers.addFirst")}
               </button>
             )}
           </div>
@@ -464,9 +472,12 @@ export function CustomersView() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-slate-100">
-                    {["Customer", "Phone", "Email", "Orders", "Joined"].map((h) => (
+                    {([
+                      "customers.colCustomer", "customers.colPhone", "customers.colEmail",
+                      "customers.colOrders", "customers.colJoined",
+                    ] as const).map((h) => (
                       <th key={h} className="px-5 py-3 text-left text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-                        {h}
+                        {t(h)}
                       </th>
                     ))}
                   </tr>
@@ -499,7 +510,7 @@ export function CustomersView() {
                             {c._count.orders}
                           </span>
                         </td>
-                        <td className="px-5 py-3.5 text-xs text-slate-400">{fmtDate(c.createdAt)}</td>
+                        <td className="px-5 py-3.5 text-xs text-slate-400">{fmtDate(c.createdAt, language)}</td>
                       </tr>
                     );
                   })}
@@ -526,7 +537,7 @@ export function CustomersView() {
                     <div className="flex-1 min-w-0">
                       <p className="font-bold text-sm text-slate-900 truncate">{c.name}</p>
                       <p className="text-xs text-slate-400 mt-0.5">
-                        {c.phone ?? c.email ?? "No contact"}
+                        {c.phone ?? c.email ?? t("customers.noContactShort")}
                       </p>
                     </div>
                     <div className="text-right shrink-0">
@@ -534,7 +545,7 @@ export function CustomersView() {
                         "text-xs font-bold px-2 py-0.5 rounded-full",
                         c._count.orders > 0 ? "bg-indigo-50 text-indigo-700" : "bg-slate-100 text-slate-500"
                       )}>
-                        {c._count.orders} orders
+                        {t("customers.ordersCount", { count: c._count.orders })}
                       </span>
                     </div>
                   </button>
@@ -553,17 +564,17 @@ export function CustomersView() {
             disabled={page <= 1}
             className="flex items-center gap-1.5 h-9 px-4 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 transition-all"
           >
-            <ChevronLeft className="h-3.5 w-3.5" /> Previous
+            <ChevronLeft className="h-3.5 w-3.5" /> {t("customers.previous")}
           </button>
           <span className="text-xs text-slate-500 tabular-nums">
-            Page <span className="font-bold text-slate-800">{page}</span> of <span className="font-bold text-slate-800">{totalPages}</span>
+            {t("orders.pageOf", { page, total: totalPages })}
           </span>
           <button
             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
             disabled={page >= totalPages}
             className="flex items-center gap-1.5 h-9 px-4 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 transition-all"
           >
-            Next <ChevronRight className="h-3.5 w-3.5" />
+            {t("customers.next")} <ChevronRight className="h-3.5 w-3.5" />
           </button>
         </div>
       )}

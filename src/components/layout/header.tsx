@@ -8,6 +8,7 @@ import {
 import { LogOut, ChevronDown, Maximize2, Minimize2 } from "lucide-react";
 import type { AuthUser } from "@/lib/auth";
 import { useLayout } from "./layout-provider";
+import { useTranslation } from "@/lib/i18n/language-context";
 
 interface HeaderProps {
   user: AuthUser;
@@ -15,6 +16,7 @@ interface HeaderProps {
 
 export function Header({ user }: HeaderProps) {
   const router = useRouter();
+  const { t } = useTranslation();
   const { mode, toggle } = useLayout();
   const logout = trpc.auth.logout.useMutation({
     onSuccess: () => {
@@ -31,7 +33,7 @@ export function Header({ user }: HeaderProps) {
       {/* Layout width toggle */}
       <button
         onClick={toggle}
-        title={mode === "focused" ? "Switch to full width" : "Switch to centered"}
+        title={mode === "focused" ? t("header.switchToFullWidth") : t("header.switchToCentered")}
         className="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-50 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
       >
         {mode === "focused" ? (
@@ -66,7 +68,7 @@ export function Header({ user }: HeaderProps) {
             onClick={() => logout.mutate()}
           >
             <LogOut className="mr-2 h-4 w-4" />
-            Sign out
+            {t("header.signOut")}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

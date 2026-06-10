@@ -6,6 +6,7 @@ import { trpc } from "@/lib/trpc/client";
 import { useFormatCurrency } from "@/lib/currency-context";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import { useTranslation, type TranslationKey } from "@/lib/i18n/language-context";
 import { FinanceNav } from "@/components/finance/finance-nav";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,8 +40,8 @@ interface BudgetForm {
   categoryId: string;
 }
 
-const PERIOD_LABELS: Record<BudgetPeriod, string> = {
-  WEEKLY: "Weekly", MONTHLY: "Monthly", QUARTERLY: "Quarterly", YEARLY: "Yearly",
+const PERIOD_LABEL_KEYS: Record<BudgetPeriod, TranslationKey> = {
+  WEEKLY: "finance.periodWeekly", MONTHLY: "finance.periodMonthly", QUARTERLY: "finance.periodQuarterly", YEARLY: "finance.periodYearly",
 };
 
 // ─── Main Component ───────────────────────────────────────────────────────────
@@ -48,6 +49,7 @@ const PERIOD_LABELS: Record<BudgetPeriod, string> = {
 export function BudgetView() {
   const { toast } = useToast();
   const formatCurrency = useFormatCurrency();
+  const { t } = useTranslation();
   const utils = trpc.useUtils();
 
   const [dialog, setDialog] = useState<"add" | "edit" | null>(null);
@@ -61,7 +63,7 @@ export function BudgetView() {
     onSuccess: () => {
       utils.finance.budget.list.invalidate();
       setDialog(null);
-      toast({ title: "Budget created" });
+      toast({ title: t("finance.budgetCreated") });
     },
     onError: (e) => toast({ title: e.message, variant: "destructive" }),
   });
@@ -70,7 +72,7 @@ export function BudgetView() {
     onSuccess: () => {
       utils.finance.budget.list.invalidate();
       setDialog(null);
-      toast({ title: "Budget updated" });
+      toast({ title: t("finance.budgetUpdated") });
     },
     onError: (e) => toast({ title: e.message, variant: "destructive" }),
   });
@@ -79,7 +81,7 @@ export function BudgetView() {
     onSuccess: () => {
       utils.finance.budget.list.invalidate();
       setDeleteConfirm(null);
-      toast({ title: "Budget deleted" });
+      toast({ title: t("finance.budgetDeleted") });
     },
     onError: (e) => toast({ title: e.message, variant: "destructive" }),
   });
@@ -141,12 +143,12 @@ export function BudgetView() {
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Finance</h1>
-          <p className="text-sm text-slate-500 mt-0.5">Budget planning and tracking</p>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">{t("finance.title")}</h1>
+          <p className="text-sm text-slate-500 mt-0.5">{t("finance.budgetSubtitle")}</p>
         </div>
         <Button size="sm" onClick={openAdd}>
           <Plus className="h-4 w-4 mr-1.5" />
-          New Budget
+          {t("finance.newBudget")}
         </Button>
       </div>
 
@@ -158,7 +160,7 @@ export function BudgetView() {
           <CardContent className="pt-5 pb-4">
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Total Budgeted</p>
+                <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">{t("finance.totalBudgeted")}</p>
                 <p className="text-xl font-bold text-slate-900 mt-1">{formatCurrency(totalBudgeted)}</p>
               </div>
               <div className="p-2 rounded-xl bg-indigo-50">
@@ -171,7 +173,7 @@ export function BudgetView() {
           <CardContent className="pt-5 pb-4">
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Total Spent</p>
+                <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">{t("finance.totalSpent")}</p>
                 <p className="text-xl font-bold text-slate-900 mt-1">{formatCurrency(totalSpent)}</p>
               </div>
               <div className="p-2 rounded-xl bg-red-50">
@@ -184,9 +186,9 @@ export function BudgetView() {
           <CardContent className="pt-5 pb-4">
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Over Budget</p>
+                <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">{t("finance.overBudget")}</p>
                 <p className="text-xl font-bold text-slate-900 mt-1">{overBudgetCount}</p>
-                <p className="text-xs text-slate-400 mt-0.5">of {budgets?.length ?? 0} budgets</p>
+                <p className="text-xs text-slate-400 mt-0.5">{t("finance.ofBudgets", { count: budgets?.length ?? 0 })}</p>
               </div>
               <div className={cn("p-2 rounded-xl", overBudgetCount > 0 ? "bg-red-50" : "bg-emerald-50")}>
                 {overBudgetCount > 0
@@ -207,8 +209,8 @@ export function BudgetView() {
       ) : (budgets?.length ?? 0) === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-slate-400">
           <Target className="h-10 w-10 mb-3 opacity-30" />
-          <p className="text-sm font-medium">No budgets set</p>
-          <p className="text-xs mt-1">Create budgets to track spending limits</p>
+          <p className="text-sm font-medium">{t("finance.noBudgets")}</p>
+          <p className="text-xs mt-1">{t("finance.createBudgetsHint")}</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -229,7 +231,7 @@ export function BudgetView() {
                       <p className="font-semibold text-slate-900 truncate">{budget.name}</p>
                       <div className="flex items-center gap-1.5 mt-0.5">
                         <span className="text-xs text-slate-400">
-                          {PERIOD_LABELS[budget.period as BudgetPeriod]}
+                          {t(PERIOD_LABEL_KEYS[budget.period as BudgetPeriod])}
                         </span>
                         {budget.category && (
                           <>
@@ -264,7 +266,7 @@ export function BudgetView() {
                   {/* Progress bar */}
                   <div className="space-y-2">
                     <div className="flex justify-between text-xs">
-                      <span className="text-slate-500">Spent</span>
+                      <span className="text-slate-500">{t("finance.spent")}</span>
                       <span className={cn(
                         "font-semibold",
                         isOver ? "text-red-600" : isWarning ? "text-amber-600" : "text-slate-700",
@@ -282,8 +284,8 @@ export function BudgetView() {
                       />
                     </div>
                     <div className="flex justify-between text-xs text-slate-500">
-                      <span>{formatCurrency(budget.spent)} spent</span>
-                      <span>{formatCurrency(budget.amount)} total</span>
+                      <span>{t("finance.spentAmount", { amount: formatCurrency(budget.spent) })}</span>
+                      <span>{t("finance.totalAmount", { amount: formatCurrency(budget.amount) })}</span>
                     </div>
                   </div>
 
@@ -297,8 +299,8 @@ export function BudgetView() {
                       : "bg-emerald-50 text-emerald-700",
                   )}>
                     {isOver
-                      ? `${formatCurrency(Math.abs(remaining))} over budget`
-                      : `${formatCurrency(remaining)} remaining`}
+                      ? t("finance.overBudgetAmount", { amount: formatCurrency(Math.abs(remaining)) })
+                      : t("finance.remainingAmount", { amount: formatCurrency(remaining) })}
                   </div>
                 </CardContent>
               </Card>
@@ -311,17 +313,17 @@ export function BudgetView() {
       <Dialog open={dialog !== null} onOpenChange={(o) => !o && setDialog(null)}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>{dialog === "edit" ? "Edit Budget" : "New Budget"}</DialogTitle>
+            <DialogTitle>{dialog === "edit" ? t("finance.editBudget") : t("finance.newBudget")}</DialogTitle>
           </DialogHeader>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 mt-2">
             <div className="space-y-1.5">
-              <Label>Budget Name</Label>
-              <Input {...form.register("name", { required: true })} placeholder="e.g. Monthly Operations" />
+              <Label>{t("finance.budgetName")}</Label>
+              <Input {...form.register("name", { required: true })} placeholder={t("finance.budgetNamePlaceholder")} />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label>Amount</Label>
+                <Label>{t("finance.amount")}</Label>
                 <Input
                   type="number"
                   step="0.01"
@@ -330,7 +332,7 @@ export function BudgetView() {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label>Period</Label>
+                <Label>{t("finance.period")}</Label>
                 <Select
                   value={form.watch("period")}
                   onValueChange={(v) => form.setValue("period", v as BudgetPeriod)}
@@ -339,10 +341,10 @@ export function BudgetView() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="WEEKLY">Weekly</SelectItem>
-                    <SelectItem value="MONTHLY">Monthly</SelectItem>
-                    <SelectItem value="QUARTERLY">Quarterly</SelectItem>
-                    <SelectItem value="YEARLY">Yearly</SelectItem>
+                    <SelectItem value="WEEKLY">{t("finance.periodWeekly")}</SelectItem>
+                    <SelectItem value="MONTHLY">{t("finance.periodMonthly")}</SelectItem>
+                    <SelectItem value="QUARTERLY">{t("finance.periodQuarterly")}</SelectItem>
+                    <SelectItem value="YEARLY">{t("finance.periodYearly")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -350,26 +352,26 @@ export function BudgetView() {
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label>Start Date</Label>
+                <Label>{t("finance.startDate")}</Label>
                 <Input type="date" {...form.register("startDate", { required: true })} />
               </div>
               <div className="space-y-1.5">
-                <Label>End Date (optional)</Label>
+                <Label>{t("finance.endDateOptional")}</Label>
                 <Input type="date" {...form.register("endDate")} />
               </div>
             </div>
 
             <div className="space-y-1.5">
-              <Label>Category (optional — tracks all if blank)</Label>
+              <Label>{t("finance.categoryTracksAll")}</Label>
               <Select
                 value={form.watch("categoryId") || "all"}
                 onValueChange={(v) => form.setValue("categoryId", v === "all" ? "" : v)}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="All categories" />
+                  <SelectValue placeholder={t("finance.allCategories")} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All categories</SelectItem>
+                  <SelectItem value="all">{t("finance.allCategories")}</SelectItem>
                   {categories?.map((c) => (
                     <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
                   ))}
@@ -379,13 +381,13 @@ export function BudgetView() {
 
             <div className="flex justify-end gap-2 pt-1">
               <Button type="button" variant="outline" onClick={() => setDialog(null)}>
-                Cancel
+                {t("common.cancel")}
               </Button>
               <Button
                 type="submit"
                 disabled={createMutation.isPending || updateMutation.isPending}
               >
-                {dialog === "edit" ? "Save Changes" : "Create Budget"}
+                {dialog === "edit" ? t("common.saveChanges") : t("finance.createBudget")}
               </Button>
             </div>
           </form>
@@ -396,19 +398,19 @@ export function BudgetView() {
       <Dialog open={!!deleteConfirm} onOpenChange={(o) => !o && setDeleteConfirm(null)}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Delete Budget</DialogTitle>
+            <DialogTitle>{t("finance.deleteBudget")}</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-slate-600">
-            This budget will be permanently deleted. Existing expenses will not be affected.
+            {t("finance.deleteBudgetDesc")}
           </p>
           <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setDeleteConfirm(null)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setDeleteConfirm(null)}>{t("common.cancel")}</Button>
             <Button
               variant="destructive"
               disabled={deleteMutation.isPending}
               onClick={() => deleteConfirm && deleteMutation.mutate({ id: deleteConfirm })}
             >
-              Delete
+              {t("common.delete")}
             </Button>
           </div>
         </DialogContent>

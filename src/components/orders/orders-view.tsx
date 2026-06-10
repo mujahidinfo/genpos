@@ -4,6 +4,7 @@ import { useState } from "react";
 import { trpc } from "@/lib/trpc/client";
 import { formatDate, cn } from "@/lib/utils";
 import { useFormatCurrency } from "@/lib/currency-context";
+import { useTranslation, type TranslationKey } from "@/lib/i18n/language-context";
 import {
   Search, X, Clock, CheckCircle2, XCircle, RefreshCw, RotateCcw,
   Banknote, CreditCard, Smartphone, Building2, ChevronLeft, ChevronRight,
@@ -25,13 +26,13 @@ type Order = RouterOutput["orders"]["list"]["items"][number];
 // ─── Config ──────────────────────────────────────────────────────────────────
 
 const STATUS_CONFIG: Record<OrderStatus, {
-  label: string; pill: string; dot: string;
+  labelKey: TranslationKey; pill: string; dot: string;
 }> = {
-  PENDING:    { label: "Pending",    pill: "bg-amber-50 text-amber-700 border border-amber-200",   dot: "bg-amber-400"   },
-  PROCESSING: { label: "Processing", pill: "bg-blue-50 text-blue-700 border border-blue-200",      dot: "bg-blue-500"    },
-  FULFILLED:  { label: "Fulfilled",  pill: "bg-emerald-50 text-emerald-700 border border-emerald-200", dot: "bg-emerald-500" },
-  CANCELED:   { label: "Canceled",   pill: "bg-red-50 text-red-600 border border-red-200",         dot: "bg-red-400"     },
-  REFUNDED:   { label: "Refunded",   pill: "bg-slate-100 text-slate-600 border border-slate-200",  dot: "bg-slate-400"   },
+  PENDING:    { labelKey: "orders.statusPending",    pill: "bg-amber-50 text-amber-700 border border-amber-200",   dot: "bg-amber-400"   },
+  PROCESSING: { labelKey: "orders.statusProcessing", pill: "bg-blue-50 text-blue-700 border border-blue-200",      dot: "bg-blue-500"    },
+  FULFILLED:  { labelKey: "orders.statusFulfilled",  pill: "bg-emerald-50 text-emerald-700 border border-emerald-200", dot: "bg-emerald-500" },
+  CANCELED:   { labelKey: "orders.statusCanceled",   pill: "bg-red-50 text-red-600 border border-red-200",         dot: "bg-red-400"     },
+  REFUNDED:   { labelKey: "orders.statusRefunded",   pill: "bg-slate-100 text-slate-600 border border-slate-200",  dot: "bg-slate-400"   },
 };
 
 const ALL_STATUSES: OrderStatus[] = ["PENDING", "PROCESSING", "FULFILLED", "CANCELED", "REFUNDED"];
@@ -41,30 +42,31 @@ const STATUS_TRANSITIONS: Partial<Record<OrderStatus, OrderStatus[]>> = {
   PROCESSING: ["FULFILLED", "CANCELED"],
 };
 
-const PAYMENT_CONFIG: Record<PaymentMethod, { label: string; Icon: React.ElementType }> = {
-  CASH:          { label: "Cash",          Icon: Banknote   },
-  CARD:          { label: "Card",          Icon: CreditCard },
-  MOBILE_MONEY:  { label: "Mobile Money",  Icon: Smartphone },
-  BANK_TRANSFER: { label: "Bank Transfer", Icon: Building2  },
+const PAYMENT_CONFIG: Record<PaymentMethod, { labelKey: TranslationKey; Icon: React.ElementType }> = {
+  CASH:          { labelKey: "sales.payCash",         Icon: Banknote   },
+  CARD:          { labelKey: "sales.payCard",         Icon: CreditCard },
+  MOBILE_MONEY:  { labelKey: "sales.payMobile",       Icon: Smartphone },
+  BANK_TRANSFER: { labelKey: "sales.payBankTransfer", Icon: Building2  },
 };
 
 const DATE_PRESETS = [
-  { label: "Today",   days: 1  },
-  { label: "7 days",  days: 7  },
-  { label: "30 days", days: 30 },
-  { label: "All",     days: 0  },
-] as const;
+  { labelKey: "orders.today",  days: 1  },
+  { labelKey: "orders.days7",  days: 7  },
+  { labelKey: "orders.days30", days: 30 },
+  { labelKey: "common.all",    days: 0  },
+] as const satisfies readonly { labelKey: TranslationKey; days: number }[];
 
 const PAGE_SIZE = 15;
 
 // ─── Status Pill ─────────────────────────────────────────────────────────────
 
 function StatusPill({ status }: { status: OrderStatus }) {
+  const { t } = useTranslation();
   const cfg = STATUS_CONFIG[status];
   return (
     <span className={cn("inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold whitespace-nowrap", cfg.pill)}>
       <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", cfg.dot)} />
-      {cfg.label}
+      {t(cfg.labelKey)}
     </span>
   );
 }
@@ -80,6 +82,7 @@ function OrderDetailPanel({ order, onClose }: DetailPanelProps) {
   const { toast } = useToast();
   const utils = trpc.useUtils();
   const formatCurrency = useFormatCurrency();
+  const { t } = useTranslation();
 
   const [refundAmt, setRefundAmt]       = useState<string>("");
   const [refundReason, setRefundReason] = useState("");
@@ -88,9 +91,9 @@ function OrderDetailPanel({ order, onClose }: DetailPanelProps) {
   const updateStatus = trpc.orders.updateStatus.useMutation({
     onSuccess: () => {
       utils.orders.list.invalidate();
-      toast({ title: "Status updated" });
+      toast({ title: t("orders.statusUpdated") });
     },
-    onError: (e) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e) => toast({ title: t("common.error"), description: e.message, variant: "destructive" }),
   });
 
   const issueRefund = trpc.orders.refund.useMutation({
@@ -99,9 +102,9 @@ function OrderDetailPanel({ order, onClose }: DetailPanelProps) {
       setShowRefund(false);
       setRefundAmt("");
       setRefundReason("");
-      toast({ title: "Refund issued" });
+      toast({ title: t("orders.refundIssued") });
     },
-    onError: (e) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onError: (e) => toast({ title: t("common.error"), description: e.message, variant: "destructive" }),
   });
 
   const totalRefunded  = order.refunds.reduce((s: number, r: { amount: number }) => s + r.amount, 0);
@@ -114,7 +117,7 @@ function OrderDetailPanel({ order, onClose }: DetailPanelProps) {
   const handleRefund = () => {
     const amt = parseFloat(refundAmt);
     if (!amt || amt <= 0 || amt > maxRefund) {
-      toast({ title: "Invalid amount", description: `Max refundable: ${formatCurrency(maxRefund)}`, variant: "destructive" });
+      toast({ title: t("orders.invalidAmount"), description: t("orders.maxRefundable", { amount: formatCurrency(maxRefund) }), variant: "destructive" });
       return;
     }
     issueRefund.mutate({ orderId: order.id, amount: amt, reason: refundReason || undefined });
@@ -127,7 +130,7 @@ function OrderDetailPanel({ order, onClose }: DetailPanelProps) {
         <button
           onClick={onClose}
           className="w-8 h-8 rounded-xl flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-all"
-          aria-label="Close"
+          aria-label={t("orders.close")}
         >
           <ArrowLeft className="h-4 w-4" />
         </button>
@@ -144,33 +147,33 @@ function OrderDetailPanel({ order, onClose }: DetailPanelProps) {
         {/* Order meta */}
         <div className="grid grid-cols-2 gap-3">
           <div className="bg-slate-50 rounded-xl p-3">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Type</p>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">{t("orders.type")}</p>
             <p className="text-sm font-semibold text-slate-800 flex items-center gap-1.5">
               {order.type === "WALK_IN" ? (
-                <><Store className="h-3.5 w-3.5 text-slate-400" /> Walk-in</>
+                <><Store className="h-3.5 w-3.5 text-slate-400" /> {t("orders.walkIn")}</>
               ) : (
-                <><ShoppingBag className="h-3.5 w-3.5 text-blue-400" /> Online</>
+                <><ShoppingBag className="h-3.5 w-3.5 text-blue-400" /> {t("orders.online")}</>
               )}
             </p>
           </div>
           <div className="bg-slate-50 rounded-xl p-3">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Cashier</p>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">{t("orders.cashier")}</p>
             <p className="text-sm font-semibold text-slate-800 flex items-center gap-1.5 truncate">
               <User className="h-3.5 w-3.5 text-slate-400 shrink-0" />
               <span className="truncate">{order.cashier.name}</span>
             </p>
           </div>
           <div className="bg-slate-50 rounded-xl p-3">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Customer</p>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">{t("orders.customer")}</p>
             <p className="text-sm font-semibold text-slate-800 truncate">
-              {order.customer?.name ?? <span className="text-slate-400 font-normal">Walk-in guest</span>}
+              {order.customer?.name ?? <span className="text-slate-400 font-normal">{t("orders.walkInGuest")}</span>}
             </p>
           </div>
           <div className="bg-slate-50 rounded-xl p-3">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Payment</p>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">{t("orders.payment")}</p>
             <p className="text-sm font-semibold text-slate-800 flex items-center gap-1.5">
               <PayIcon className="h-3.5 w-3.5 text-slate-400" />
-              {payConfig?.label}
+              {payConfig && t(payConfig.labelKey)}
             </p>
           </div>
         </div>
@@ -178,7 +181,7 @@ function OrderDetailPanel({ order, onClose }: DetailPanelProps) {
         {/* Items */}
         <div>
           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">
-            Items ({order.items.length})
+            {t("orders.itemsHeading", { count: order.items.length })}
           </p>
           <div className="space-y-1">
             {order.items.map((item: Order["items"][number]) => (
@@ -213,16 +216,16 @@ function OrderDetailPanel({ order, onClose }: DetailPanelProps) {
 
         {/* Totals */}
         <div className="bg-slate-50 rounded-xl p-4 space-y-2">
-          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Summary</p>
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">{t("orders.summary")}</p>
           <div className="flex justify-between text-sm text-slate-500">
-            <span>Subtotal</span>
+            <span>{t("common.subtotal")}</span>
             <span className="tabular-nums">{formatCurrency(order.subtotal)}</span>
           </div>
           {order.discountAmt > 0 && (
             <div className="flex justify-between text-sm font-semibold text-emerald-600">
               <span className="flex items-center gap-1.5">
                 <Tag className="h-3 w-3" />
-                Discount
+                {t("common.discount")}
                 {order.discountType === "percentage" && ` (${order.discountValue}%)`}
               </span>
               <span className="tabular-nums">−{formatCurrency(order.discountAmt)}</span>
@@ -230,7 +233,7 @@ function OrderDetailPanel({ order, onClose }: DetailPanelProps) {
           )}
           {order.taxAmt > 0 && (
             <div className="flex justify-between text-sm text-slate-500">
-              <span>Tax ({order.taxRate}%)</span>
+              <span>{t("common.tax")} ({order.taxRate}%)</span>
               <span className="tabular-nums">{formatCurrency(order.taxAmt)}</span>
             </div>
           )}
@@ -238,13 +241,13 @@ function OrderDetailPanel({ order, onClose }: DetailPanelProps) {
             <div className="flex justify-between text-sm font-semibold text-red-500">
               <span className="flex items-center gap-1.5">
                 <RotateCcw className="h-3 w-3" />
-                Refunded
+                {t("orders.refundedLabel")}
               </span>
               <span className="tabular-nums">−{formatCurrency(totalRefunded)}</span>
             </div>
           )}
           <div className="flex justify-between items-baseline pt-2 border-t border-slate-200">
-            <span className="text-sm font-bold text-slate-700">Total</span>
+            <span className="text-sm font-bold text-slate-700">{t("common.total")}</span>
             <span className="text-xl font-black text-slate-900 tabular-nums">
               {formatCurrency(order.total)}
             </span>
@@ -254,7 +257,7 @@ function OrderDetailPanel({ order, onClose }: DetailPanelProps) {
         {/* Status update */}
         {nextStatuses.length > 0 && (
           <div>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Update status</p>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">{t("orders.updateStatus")}</p>
             <div className="flex flex-wrap gap-2">
               {nextStatuses.map((s) => {
                 const cfg = STATUS_CONFIG[s];
@@ -270,7 +273,7 @@ function OrderDetailPanel({ order, onClose }: DetailPanelProps) {
                     )}
                   >
                     <span className={cn("w-2 h-2 rounded-full", cfg.dot)} />
-                    Mark as {cfg.label}
+                    {t("orders.markAs", { status: t(cfg.labelKey) })}
                     {updateStatus.isPending && (
                       <span className="h-3 w-3 rounded-full border border-current border-t-transparent animate-spin ml-1" />
                     )}
@@ -284,13 +287,13 @@ function OrderDetailPanel({ order, onClose }: DetailPanelProps) {
         {/* Refund section */}
         {(refundable || totalRefunded > 0) && (
           <div>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Refund</p>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">{t("orders.refund")}</p>
 
             {totalRefunded > 0 && (
               <div className="flex items-center justify-between mb-3 px-3 py-2 bg-red-50 rounded-xl border border-red-100">
                 <span className="text-xs font-semibold text-red-600 flex items-center gap-1.5">
                   <RotateCcw className="h-3.5 w-3.5" />
-                  Refunded so far
+                  {t("orders.refundedSoFar")}
                 </span>
                 <span className="text-xs font-black text-red-600 tabular-nums">
                   {formatCurrency(totalRefunded)}
@@ -304,7 +307,7 @@ function OrderDetailPanel({ order, onClose }: DetailPanelProps) {
                 className="w-full flex items-center justify-center gap-2 h-10 rounded-xl border border-red-200 text-red-600 text-xs font-bold hover:bg-red-50 transition-all"
               >
                 <RotateCcw className="h-3.5 w-3.5" />
-                Issue Refund (max {formatCurrency(maxRefund)})
+                {t("orders.issueRefundMax", { amount: formatCurrency(maxRefund) })}
               </button>
             )}
 
@@ -313,12 +316,12 @@ function OrderDetailPanel({ order, onClose }: DetailPanelProps) {
                 <div className="flex items-center justify-between">
                   <p className="text-xs font-bold text-red-700 flex items-center gap-1.5">
                     <RotateCcw className="h-3.5 w-3.5" />
-                    Issue Refund
+                    {t("orders.issueRefund")}
                   </p>
                   <button
                     onClick={() => { setShowRefund(false); setRefundAmt(""); setRefundReason(""); }}
                     className="text-red-400 hover:text-red-700 transition-colors"
-                    aria-label="Cancel refund"
+                    aria-label={t("orders.cancelRefund")}
                   >
                     <X className="h-3.5 w-3.5" />
                   </button>
@@ -332,7 +335,7 @@ function OrderDetailPanel({ order, onClose }: DetailPanelProps) {
                       min={0.01}
                       max={maxRefund}
                       step={0.01}
-                      placeholder={`0.00 – max ${formatCurrency(maxRefund)}`}
+                      placeholder={t("orders.refundPlaceholder", { amount: formatCurrency(maxRefund) })}
                       value={refundAmt}
                       onChange={(e) => setRefundAmt(e.target.value)}
                       className="w-full h-10 pl-7 pr-3 bg-white border border-red-200 rounded-xl text-sm font-semibold text-slate-800 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-red-400"
@@ -340,7 +343,7 @@ function OrderDetailPanel({ order, onClose }: DetailPanelProps) {
                   </div>
                   <input
                     type="text"
-                    placeholder="Reason (optional)"
+                    placeholder={t("orders.refundReason")}
                     value={refundReason}
                     onChange={(e) => setRefundReason(e.target.value)}
                     className="w-full h-10 px-3 bg-white border border-red-200 rounded-xl text-sm text-slate-700 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-red-400"
@@ -353,7 +356,7 @@ function OrderDetailPanel({ order, onClose }: DetailPanelProps) {
                     {issueRefund.isPending ? (
                       <span className="h-4 w-4 rounded-full border-2 border-white/30 border-t-white animate-spin" />
                     ) : (
-                      <><RotateCcw className="h-3.5 w-3.5" /> Confirm Refund</>
+                      <><RotateCcw className="h-3.5 w-3.5" /> {t("orders.confirmRefund")}</>
                     )}
                   </button>
                 </div>
@@ -370,6 +373,7 @@ function OrderDetailPanel({ order, onClose }: DetailPanelProps) {
 
 export function OrdersView() {
   const formatCurrency = useFormatCurrency();
+  const { t } = useTranslation();
   const [search, setSearch]           = useState("");
   const [statusFilter, setStatusFilter] = useState<OrderStatus | "all">("all");
   const [datePreset, setDatePreset]   = useState<0 | 1 | 7 | 30>(0);
@@ -411,8 +415,8 @@ export function OrdersView() {
 
       {/* ── Header ────────────────────────────────────────────── */}
       <div className="shrink-0">
-        <h1 className="text-2xl font-black text-slate-900 tracking-tight">Orders</h1>
-        <p className="text-sm text-slate-400 mt-0.5">Track, manage, and update all orders</p>
+        <h1 className="text-2xl font-black text-slate-900 tracking-tight">{t("orders.title")}</h1>
+        <p className="text-sm text-slate-400 mt-0.5">{t("orders.subtitle")}</p>
       </div>
 
       {/* ── Filters ───────────────────────────────────────────── */}
@@ -422,7 +426,7 @@ export function OrdersView() {
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
           <input
             type="search"
-            placeholder="Search by order number or customer..."
+            placeholder={t("orders.searchPlaceholder")}
             value={search}
             onChange={(e) => handleSearchChange(e.target.value)}
             className="w-full h-11 pl-10 pr-10 bg-white border border-slate-200 rounded-xl text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent shadow-sm"
@@ -430,7 +434,7 @@ export function OrdersView() {
           {search && (
             <button
               onClick={() => handleSearchChange("")}
-              aria-label="Clear search"
+              aria-label={t("orders.clearSearch")}
               className="absolute right-3 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 hover:bg-slate-200 transition-colors"
             >
               <X className="h-3.5 w-3.5" />
@@ -451,7 +455,7 @@ export function OrdersView() {
                   : "bg-white border border-slate-200 text-slate-500 hover:border-slate-300"
               )}
             >
-              All
+              {t("common.all")}
             </button>
             {ALL_STATUSES.map((s: OrderStatus) => {
               const cfg = STATUS_CONFIG[s];
@@ -470,7 +474,7 @@ export function OrdersView() {
                     "w-1.5 h-1.5 rounded-full shrink-0",
                     statusFilter === s ? cfg.dot : "bg-slate-300"
                   )} />
-                  {cfg.label}
+                  {t(cfg.labelKey)}
                 </button>
               );
             })}
@@ -478,7 +482,7 @@ export function OrdersView() {
 
           {/* Date preset chips */}
           <div className="flex gap-1.5 sm:ml-auto shrink-0">
-            {DATE_PRESETS.map(({ label, days }) => (
+            {DATE_PRESETS.map(({ labelKey, days }) => (
               <button
                 key={days}
                 onClick={() => handleDateChange(days as 0 | 1 | 7 | 30)}
@@ -489,7 +493,7 @@ export function OrdersView() {
                     : "bg-white border border-slate-200 text-slate-500 hover:border-slate-300"
                 )}
               >
-                {label}
+                {t(labelKey)}
               </button>
             ))}
           </div>
@@ -502,12 +506,12 @@ export function OrdersView() {
         {/* Results bar */}
         <div className="flex items-center justify-between shrink-0">
           <p className="text-sm text-slate-500">
-            {isLoading ? "Loading..." : (
+            {isLoading ? t("common.loading") : (
               <>
                 <span className="font-semibold text-slate-800">{totalCount}</span>
-                {" "}order{totalCount !== 1 ? "s" : ""}
-                {statusFilter !== "all" && ` · ${STATUS_CONFIG[statusFilter].label}`}
-                {datePreset > 0 && ` · last ${datePreset === 1 ? "day" : `${datePreset} days`}`}
+                {" "}{totalCount !== 1 ? t("orders.orderCountPlural") : t("orders.orderCount")}
+                {statusFilter !== "all" && ` · ${t(STATUS_CONFIG[statusFilter].labelKey)}`}
+                {datePreset > 0 && ` · ${datePreset === 1 ? t("orders.lastDay") : t("orders.lastDays", { count: datePreset })}`}
               </>
             )}
           </p>
@@ -535,13 +539,13 @@ export function OrdersView() {
               <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center mb-4 border border-slate-100">
                 <Receipt className="h-7 w-7 text-slate-200" />
               </div>
-              <p className="text-sm font-semibold text-slate-400">No orders found</p>
+              <p className="text-sm font-semibold text-slate-400">{t("orders.noOrders")}</p>
               {(search || statusFilter !== "all") && (
                 <button
                   onClick={() => { handleSearchChange(""); handleStatusChange("all"); }}
                   className="text-xs text-indigo-600 mt-2 hover:underline font-semibold"
                 >
-                  Clear filters
+                  {t("orders.clearFilters")}
                 </button>
               )}
             </div>
@@ -551,9 +555,12 @@ export function OrdersView() {
               <table className="hidden md:table w-full text-sm">
                 <thead>
                   <tr className="border-b border-slate-100">
-                    {["Order #", "Customer", "Items", "Total", "Payment", "Status", "Date"].map((h) => (
+                    {([
+                      "orders.colOrderNum", "orders.colCustomer", "orders.colItems",
+                      "orders.colTotal", "orders.colPayment", "orders.colStatus", "orders.colDate",
+                    ] as const).map((h) => (
                       <th key={h} className="px-5 py-3 text-left text-[11px] font-bold text-slate-400 uppercase tracking-wider whitespace-nowrap">
-                        {h}
+                        {t(h)}
                       </th>
                     ))}
                   </tr>
@@ -579,11 +586,13 @@ export function OrdersView() {
                             "font-medium",
                             order.customer?.name ? "text-slate-800" : "text-slate-400 italic"
                           )}>
-                            {order.customer?.name ?? "Walk-in"}
+                            {order.customer?.name ?? t("orders.walkIn")}
                           </span>
                         </td>
                         <td className="px-5 py-3.5 text-slate-600 tabular-nums">
-                          {order.items.length} item{order.items.length !== 1 ? "s" : ""}
+                          {order.items.length !== 1
+                            ? t("orders.itemCountPlural", { count: order.items.length })
+                            : t("orders.itemCount", { count: order.items.length })}
                         </td>
                         <td className="px-5 py-3.5 font-bold text-slate-900 tabular-nums whitespace-nowrap">
                           {formatCurrency(order.total)}
@@ -591,7 +600,7 @@ export function OrdersView() {
                         <td className="px-5 py-3.5">
                           <span className="flex items-center gap-1.5 text-slate-500">
                             <PayIcon className="h-3.5 w-3.5 shrink-0" />
-                            <span className="text-xs">{payConfig?.label}</span>
+                            <span className="text-xs">{payConfig && t(payConfig.labelKey)}</span>
                           </span>
                         </td>
                         <td className="px-5 py-3.5">
@@ -636,13 +645,15 @@ export function OrdersView() {
                         </div>
                         <div className="flex items-center justify-between gap-2 mt-1">
                           <span className="text-xs text-slate-400 truncate">
-                            {order.customer?.name ?? "Walk-in"} · {order.items.length} item{order.items.length !== 1 ? "s" : ""}
+                            {order.customer?.name ?? t("orders.walkIn")} · {order.items.length !== 1
+                              ? t("orders.itemCountPlural", { count: order.items.length })
+                              : t("orders.itemCount", { count: order.items.length })}
                           </span>
                           <StatusPill status={order.status as OrderStatus} />
                         </div>
                         <div className="flex items-center gap-1.5 mt-1 text-[11px] text-slate-400">
                           <PayIcon className="h-3 w-3" />
-                          <span>{payConfig?.label}</span>
+                          <span>{payConfig && t(payConfig.labelKey)}</span>
                           <span>·</span>
                           <CalendarDays className="h-3 w-3" />
                           <span>{formatDate(order.createdAt)}</span>
@@ -666,17 +677,17 @@ export function OrdersView() {
               className="flex items-center gap-1.5 h-9 px-4 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
             >
               <ChevronLeft className="h-3.5 w-3.5" />
-              Previous
+              {t("orders.previous")}
             </button>
             <span className="text-xs text-slate-500 tabular-nums">
-              Page <span className="font-bold text-slate-800">{page}</span> of <span className="font-bold text-slate-800">{totalPages}</span>
+              {t("orders.pageOf", { page, total: totalPages })}
             </span>
             <button
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               disabled={page >= totalPages}
               className="flex items-center gap-1.5 h-9 px-4 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
             >
-              Next
+              {t("orders.next")}
               <ChevronRight className="h-3.5 w-3.5" />
             </button>
           </div>

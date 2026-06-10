@@ -4,6 +4,7 @@ import { useState } from "react";
 import { trpc } from "@/lib/trpc/client";
 import { useFormatCurrency } from "@/lib/currency-context";
 import { cn } from "@/lib/utils";
+import { useTranslation, type TranslationKey } from "@/lib/i18n/language-context";
 import { FinanceNav } from "@/components/finance/finance-nav";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,25 +34,25 @@ import {
 type ReportType = "income_statement" | "expense" | "employee_salary";
 type PaymentMethod = "CASH" | "CARD" | "MOBILE_MONEY" | "BANK_TRANSFER";
 
-const PAYMENT_LABELS: Record<PaymentMethod, string> = {
-  CASH: "Cash", CARD: "Card", MOBILE_MONEY: "Mobile Money", BANK_TRANSFER: "Bank Transfer",
+const PAYMENT_LABEL_KEYS: Record<PaymentMethod, TranslationKey> = {
+  CASH: "sales.payCash", CARD: "sales.payCard", MOBILE_MONEY: "sales.payMobile", BANK_TRANSFER: "sales.payBankTransfer",
 };
 
-const REPORT_TYPE_CONFIG: Record<ReportType, { label: string; icon: React.ElementType; description: string }> = {
+const REPORT_TYPE_CONFIG: Record<ReportType, { labelKey: TranslationKey; icon: React.ElementType; descKey: TranslationKey }> = {
   income_statement: {
-    label: "Income Statement",
+    labelKey: "finance.typeIncomeStatement",
     icon: DollarSign,
-    description: "Revenue vs expenses with net profit/loss",
+    descKey: "finance.descIncome",
   },
   expense: {
-    label: "Expense Report",
+    labelKey: "finance.typeExpense",
     icon: TrendingDown,
-    description: "Detailed breakdown of all expenses",
+    descKey: "finance.descExpense",
   },
   employee_salary: {
-    label: "Salary Report",
+    labelKey: "finance.typeSalary",
     icon: Users,
-    description: "Employee salary costs for the period",
+    descKey: "finance.descSalary",
   },
 };
 
@@ -92,6 +93,7 @@ function getPreset(preset: string): { from: string; to: string } {
 
 export function ReportsView() {
   const formatCurrency = useFormatCurrency();
+  const { t, language } = useTranslation();
 
   const today = new Date();
   const defaultFrom = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split("T")[0];
@@ -139,13 +141,13 @@ export function ReportsView() {
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Finance</h1>
-          <p className="text-sm text-slate-500 mt-0.5">Generate financial reports</p>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">{t("finance.title")}</h1>
+          <p className="text-sm text-slate-500 mt-0.5">{t("finance.reportsSubtitle")}</p>
         </div>
         {data && (
           <Button variant="outline" size="sm" onClick={handlePrint} className="print:hidden">
             <Printer className="h-4 w-4 mr-1.5" />
-            Print
+            {t("finance.print")}
           </Button>
         )}
       </div>
@@ -155,7 +157,7 @@ export function ReportsView() {
       {/* Report Config */}
       <Card className="print:hidden">
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">Configure Report</CardTitle>
+          <CardTitle className="text-base">{t("finance.configureReport")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Report type selector */}
@@ -183,9 +185,9 @@ export function ReportsView() {
                     </div>
                     <div>
                       <p className={cn("text-sm font-semibold", reportType === type ? "text-indigo-700" : "text-slate-700")}>
-                        {cfg.label}
+                        {t(cfg.labelKey)}
                       </p>
-                      <p className="text-xs text-slate-400 mt-0.5">{cfg.description}</p>
+                      <p className="text-xs text-slate-400 mt-0.5">{t(cfg.descKey)}</p>
                     </div>
                   </button>
                 );
@@ -196,7 +198,7 @@ export function ReportsView() {
           {/* Date range */}
           <div className="flex flex-wrap items-end gap-3">
             <div className="space-y-1.5">
-              <Label>From</Label>
+              <Label>{t("finance.from")}</Label>
               <Input
                 type="date"
                 value={fromDate}
@@ -205,7 +207,7 @@ export function ReportsView() {
               />
             </div>
             <div className="space-y-1.5">
-              <Label>To</Label>
+              <Label>{t("finance.to")}</Label>
               <Input
                 type="date"
                 value={toDate}
@@ -216,19 +218,19 @@ export function ReportsView() {
 
             {/* Presets */}
             <div className="flex gap-1.5 flex-wrap">
-              {[
-                { label: "This Month", value: "this_month" },
-                { label: "Last Month", value: "last_month" },
-                { label: "This Quarter", value: "this_quarter" },
-                { label: "This Year", value: "this_year" },
-              ].map((p) => (
+              {([
+                { labelKey: "finance.presetThisMonth", value: "this_month" },
+                { labelKey: "finance.presetLastMonth", value: "last_month" },
+                { labelKey: "finance.presetThisQuarter", value: "this_quarter" },
+                { labelKey: "finance.presetThisYear", value: "this_year" },
+              ] as const).map((p) => (
                 <button
                   key={p.value}
                   type="button"
                   onClick={() => applyPreset(p.value)}
                   className="px-3 py-1.5 text-xs font-medium rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600 transition-colors"
                 >
-                  {p.label}
+                  {t(p.labelKey)}
                 </button>
               ))}
             </div>
@@ -237,16 +239,16 @@ export function ReportsView() {
           {/* Category filter (only for expense report) */}
           {reportType === "expense" && (
             <div className="space-y-1.5 max-w-xs">
-              <Label>Category Filter (optional)</Label>
+              <Label>{t("finance.categoryFilterOptional")}</Label>
               <Select
                 value={filterCategory || "all"}
                 onValueChange={(v) => { setFilterCategory(v === "all" ? "" : v); setGenerated(false); }}
               >
                 <SelectTrigger className="h-9">
-                  <SelectValue placeholder="All categories" />
+                  <SelectValue placeholder={t("finance.allCategories")} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All categories</SelectItem>
+                  <SelectItem value="all">{t("finance.allCategories")}</SelectItem>
                   {categories?.map((c) => (
                     <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
                   ))}
@@ -257,7 +259,7 @@ export function ReportsView() {
 
           <Button onClick={generate} disabled={isLoading}>
             <FileText className="h-4 w-4 mr-1.5" />
-            {isLoading ? "Generating…" : "Generate Report"}
+            {isLoading ? t("finance.generating") : t("finance.generateReport")}
           </Button>
         </CardContent>
       </Card>
@@ -273,12 +275,12 @@ export function ReportsView() {
         <div className="space-y-4 print:space-y-6">
           {/* Print header */}
           <div className="hidden print:block border-b pb-4 mb-6">
-            <h1 className="text-2xl font-bold">{REPORT_TYPE_CONFIG[reportType].label}</h1>
+            <h1 className="text-2xl font-bold">{t(REPORT_TYPE_CONFIG[reportType].labelKey)}</h1>
             <p className="text-sm text-gray-500 mt-1">
-              Period: {new Date(fromDate).toLocaleDateString()} – {new Date(toDate).toLocaleDateString()}
+              {t("finance.periodRange", { from: new Date(fromDate).toLocaleDateString(language === "bn" ? "bn-BD" : "en-US"), to: new Date(toDate).toLocaleDateString(language === "bn" ? "bn-BD" : "en-US") })}
             </p>
             <p className="text-sm text-gray-500">
-              Generated: {new Date().toLocaleString()}
+              {t("finance.generatedAt", { date: new Date().toLocaleString(language === "bn" ? "bn-BD" : "en-US") })}
             </p>
           </div>
 
@@ -297,7 +299,7 @@ export function ReportsView() {
       {!data && !isLoading && generated && (
         <div className="flex flex-col items-center justify-center py-16 text-slate-400">
           <FileText className="h-10 w-10 mb-3 opacity-30" />
-          <p className="text-sm font-medium">No data for the selected period</p>
+          <p className="text-sm font-medium">{t("finance.noDataPeriod")}</p>
         </div>
       )}
     </div>
@@ -343,6 +345,7 @@ function IncomeStatementReport({
   data: IncomeStatementData;
   formatCurrency: (v: number) => string;
 }) {
+  const { t } = useTranslation();
   const netPositive = data.netProfit >= 0;
 
   return (
@@ -351,28 +354,28 @@ function IncomeStatementReport({
       <div className="grid grid-cols-3 gap-4">
         <Card>
           <CardContent className="pt-5 pb-4">
-            <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Gross Revenue</p>
+            <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">{t("finance.grossRevenue")}</p>
             <p className="text-2xl font-bold text-emerald-600 mt-1">{formatCurrency(data.income.grossRevenue)}</p>
-            <p className="text-xs text-slate-400 mt-1">{data.income.orderCount} orders</p>
+            <p className="text-xs text-slate-400 mt-1">{t("finance.ordersCount", { count: data.income.orderCount })}</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="pt-5 pb-4">
-            <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Total Expenses</p>
+            <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">{t("finance.totalExpenses")}</p>
             <p className="text-2xl font-bold text-red-600 mt-1">{formatCurrency(data.expenses.total)}</p>
-            <p className="text-xs text-slate-400 mt-1">{data.expenses.rows.length} categories</p>
+            <p className="text-xs text-slate-400 mt-1">{t("finance.categoriesCount", { count: data.expenses.rows.length })}</p>
           </CardContent>
         </Card>
         <Card className={cn("border-2", netPositive ? "border-emerald-200" : "border-red-200")}>
           <CardContent className="pt-5 pb-4">
-            <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Net {netPositive ? "Profit" : "Loss"}</p>
+            <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">{netPositive ? t("finance.netProfit") : t("finance.netLoss")}</p>
             <p className={cn("text-2xl font-bold mt-1", netPositive ? "text-emerald-600" : "text-red-600")}>
               {formatCurrency(Math.abs(data.netProfit))}
             </p>
             <p className="text-xs text-slate-400 mt-1">
-              Margin: {data.income.grossRevenue > 0
+              {t("finance.margin", { pct: data.income.grossRevenue > 0
                 ? ((data.netProfit / data.income.grossRevenue) * 100).toFixed(1)
-                : "0"}%
+                : "0" })}
             </p>
           </CardContent>
         </Card>
@@ -383,22 +386,22 @@ function IncomeStatementReport({
         <CardHeader className="pb-2">
           <CardTitle className="text-base flex items-center gap-2">
             <TrendingUp className="h-4 w-4 text-emerald-500" />
-            Revenue
+            {t("finance.revenue")}
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           <Table>
             <TableBody>
               <TableRow>
-                <TableCell className="font-medium">Gross Revenue</TableCell>
+                <TableCell className="font-medium">{t("finance.grossRevenue")}</TableCell>
                 <TableCell className="text-right font-semibold text-emerald-600">{formatCurrency(data.income.grossRevenue)}</TableCell>
               </TableRow>
               <TableRow>
-                <TableCell className="text-slate-500">Tax Collected</TableCell>
+                <TableCell className="text-slate-500">{t("finance.taxCollected")}</TableCell>
                 <TableCell className="text-right text-slate-600">{formatCurrency(data.income.taxCollected)}</TableCell>
               </TableRow>
               <TableRow>
-                <TableCell className="text-slate-500">Discounts Given</TableCell>
+                <TableCell className="text-slate-500">{t("finance.discountsGiven")}</TableCell>
                 <TableCell className="text-right text-slate-600">({formatCurrency(data.income.discountsGiven)})</TableCell>
               </TableRow>
             </TableBody>
@@ -411,16 +414,16 @@ function IncomeStatementReport({
         <CardHeader className="pb-2">
           <CardTitle className="text-base flex items-center gap-2">
             <TrendingDown className="h-4 w-4 text-red-500" />
-            Expenses by Category
+            {t("finance.expensesByCategory")}
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           <Table>
             <TableHeader>
               <TableRow className="bg-slate-50/50">
-                <TableHead>Category</TableHead>
-                <TableHead className="text-right">Amount</TableHead>
-                <TableHead className="text-right">% of Revenue</TableHead>
+                <TableHead>{t("finance.colCategory")}</TableHead>
+                <TableHead className="text-right">{t("finance.colAmount")}</TableHead>
+                <TableHead className="text-right">{t("finance.colPctRevenue")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -441,7 +444,7 @@ function IncomeStatementReport({
                 </TableRow>
               ))}
               <TableRow className="font-semibold bg-slate-50">
-                <TableCell>Total Expenses</TableCell>
+                <TableCell>{t("finance.totalExpensesRow")}</TableCell>
                 <TableCell className="text-right text-red-600">{formatCurrency(data.expenses.total)}</TableCell>
                 <TableCell className="text-right text-slate-600">
                   {data.income.grossRevenue > 0
@@ -466,12 +469,13 @@ function ExpenseReport({
   data: ExpenseData;
   formatCurrency: (v: number) => string;
 }) {
+  const { t, language } = useTranslation();
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <p className="text-sm text-slate-500">{data.items.length} expense(s) found</p>
+        <p className="text-sm text-slate-500">{t("finance.expensesFound", { count: data.items.length })}</p>
         <div className="text-right">
-          <p className="text-xs text-slate-400">Total</p>
+          <p className="text-xs text-slate-400">{t("finance.total")}</p>
           <p className="text-lg font-bold text-slate-900">{formatCurrency(data.total)}</p>
         </div>
       </div>
@@ -481,12 +485,12 @@ function ExpenseReport({
           <Table>
             <TableHeader>
               <TableRow className="bg-slate-50/50">
-                <TableHead>Title</TableHead>
-                <TableHead>Category</TableHead>
-                <TableHead className="hidden md:table-cell">Date</TableHead>
-                <TableHead className="hidden md:table-cell">Payment</TableHead>
-                <TableHead className="hidden md:table-cell">Employee</TableHead>
-                <TableHead className="text-right">Amount</TableHead>
+                <TableHead>{t("finance.colTitle")}</TableHead>
+                <TableHead>{t("finance.colCategory")}</TableHead>
+                <TableHead className="hidden md:table-cell">{t("finance.colDate")}</TableHead>
+                <TableHead className="hidden md:table-cell">{t("finance.colPayment")}</TableHead>
+                <TableHead className="hidden md:table-cell">{t("finance.colEmployee")}</TableHead>
+                <TableHead className="text-right">{t("finance.colAmount")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -503,10 +507,10 @@ function ExpenseReport({
                     </div>
                   </TableCell>
                   <TableCell className="hidden md:table-cell text-sm text-slate-500">
-                    {new Date(expense.date).toLocaleDateString()}
+                    {new Date(expense.date).toLocaleDateString(language === "bn" ? "bn-BD" : "en-US")}
                   </TableCell>
                   <TableCell className="hidden md:table-cell text-sm text-slate-500">
-                    {PAYMENT_LABELS[expense.paymentMethod as PaymentMethod]}
+                    {t(PAYMENT_LABEL_KEYS[expense.paymentMethod as PaymentMethod])}
                   </TableCell>
                   <TableCell className="hidden md:table-cell text-sm text-slate-500">
                     {expense.employee?.name ?? "—"}
@@ -517,7 +521,7 @@ function ExpenseReport({
                 </TableRow>
               ))}
               <TableRow className="bg-slate-50 font-semibold">
-                <TableCell colSpan={5}>Total</TableCell>
+                <TableCell colSpan={5}>{t("finance.total")}</TableCell>
                 <TableCell className="text-right text-slate-900">{formatCurrency(data.total)}</TableCell>
               </TableRow>
             </TableBody>
@@ -530,8 +534,8 @@ function ExpenseReport({
 
 // ─── Salary Report ────────────────────────────────────────────────────────────
 
-const SALARY_LABELS: Record<string, string> = {
-  MONTHLY: "mo", HOURLY: "hr", WEEKLY: "wk", ANNUALLY: "yr",
+const SALARY_UNIT_KEYS: Record<string, TranslationKey> = {
+  MONTHLY: "finance.unitMo", HOURLY: "finance.unitHr", WEEKLY: "finance.unitWk", ANNUALLY: "finance.unitYr",
 };
 
 function SalaryReport({
@@ -541,14 +545,15 @@ function SalaryReport({
   data: SalaryData;
   formatCurrency: (v: number) => string;
 }) {
+  const { t } = useTranslation();
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <p className="text-sm text-slate-500">
-          {data.items.length} active employee(s) · {data.months} month(s) period
+          {t("finance.activeEmpPeriod", { employees: data.items.length, months: data.months })}
         </p>
         <div className="text-right">
-          <p className="text-xs text-slate-400">Total Payroll</p>
+          <p className="text-xs text-slate-400">{t("finance.totalPayroll")}</p>
           <p className="text-lg font-bold text-slate-900">{formatCurrency(data.totalSalary)}</p>
         </div>
       </div>
@@ -558,11 +563,11 @@ function SalaryReport({
           <Table>
             <TableHeader>
               <TableRow className="bg-slate-50/50">
-                <TableHead>Employee</TableHead>
-                <TableHead>Position</TableHead>
-                <TableHead className="hidden md:table-cell">Rate</TableHead>
-                <TableHead className="hidden md:table-cell">Monthly Est.</TableHead>
-                <TableHead className="text-right">Period Total</TableHead>
+                <TableHead>{t("finance.colEmployee")}</TableHead>
+                <TableHead>{t("finance.colPosition")}</TableHead>
+                <TableHead className="hidden md:table-cell">{t("finance.colRate")}</TableHead>
+                <TableHead className="hidden md:table-cell">{t("finance.colMonthlyEst")}</TableHead>
+                <TableHead className="text-right">{t("finance.colPeriodTotal")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -571,7 +576,7 @@ function SalaryReport({
                   <TableCell className="font-medium text-slate-800">{row.name}</TableCell>
                   <TableCell className="text-sm text-slate-500">{row.position}</TableCell>
                   <TableCell className="hidden md:table-cell text-sm text-slate-500">
-                    {formatCurrency(row.salary)}/{SALARY_LABELS[row.salaryType] ?? "mo"}
+                    {formatCurrency(row.salary)}/{t(SALARY_UNIT_KEYS[row.salaryType] ?? "finance.unitMo")}
                   </TableCell>
                   <TableCell className="hidden md:table-cell text-sm text-slate-700">
                     {formatCurrency(row.monthlySalary)}
@@ -582,7 +587,7 @@ function SalaryReport({
                 </TableRow>
               ))}
               <TableRow className="bg-slate-50 font-semibold">
-                <TableCell colSpan={4}>Total Payroll</TableCell>
+                <TableCell colSpan={4}>{t("finance.totalPayroll")}</TableCell>
                 <TableCell className="text-right text-slate-900">{formatCurrency(data.totalSalary)}</TableCell>
               </TableRow>
             </TableBody>
