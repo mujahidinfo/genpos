@@ -1,6 +1,6 @@
 "use client";
 import { trpc } from "@/lib/trpc/client";
-import { useFormatCurrency } from "@/lib/currency-context";
+import { useFormatCurrencyExact, useFormatCurrencyCompact } from "@/lib/currency-context";
 import { useTranslation } from "@/lib/i18n/language-context";
 import type { Language } from "@/lib/i18n/translations";
 import {
@@ -83,7 +83,7 @@ function ChartTooltip({ active, payload, label }: {
   payload?: { value: number }[];
   label?: string;
 }) {
-  const formatCurrency = useFormatCurrency();
+  const formatCurrency = useFormatCurrencyExact();
   if (!active || !payload?.length) return null;
   return (
     <div className="bg-white border border-slate-100 rounded-xl shadow-lg px-3 py-2.5">
@@ -94,7 +94,9 @@ function ChartTooltip({ active, payload, label }: {
 }
 
 export function DashboardOverview({ user }: { user: AuthUser }) {
-  const formatCurrency = useFormatCurrency();
+  const formatCurrency = useFormatCurrencyExact();
+  // Axis ticks only — the tooltip carries the exact figure.
+  const formatAxis = useFormatCurrencyCompact();
   const { t, language } = useTranslation();
   const { data: overview, isLoading: overviewLoading } = trpc.analytics.overview.useQuery();
   const { data: salesChart } = trpc.analytics.salesChart.useQuery();
@@ -224,9 +226,7 @@ export function DashboardOverview({ user }: { user: AuthUser }) {
                 tick={{ fontSize: 10, fill: "#94a3b8" }}
                 axisLine={false}
                 tickLine={false}
-                tickFormatter={(v) =>
-                  v >= 1000 ? `$${(v / 1000).toFixed(0)}k` : `$${v}`
-                }
+                tickFormatter={(v) => formatAxis(v as number)}
               />
               <Tooltip content={<ChartTooltip />} cursor={{ stroke: "#e2e8f0", strokeWidth: 1 }} />
               <Area

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { trpc } from "@/lib/trpc/client";
-import { useFormatCurrency } from "@/lib/currency-context";
+import { useFormatCurrencyExact } from "@/lib/currency-context";
 import { cn } from "@/lib/utils";
 import { useTranslation, type TranslationKey } from "@/lib/i18n/language-context";
 import { FinanceNav } from "@/components/finance/finance-nav";
@@ -92,7 +92,7 @@ function getPreset(preset: string): { from: string; to: string } {
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export function ReportsView() {
-  const formatCurrency = useFormatCurrency();
+  const formatCurrency = useFormatCurrencyExact();
   const { t, language } = useTranslation();
 
   const today = new Date();

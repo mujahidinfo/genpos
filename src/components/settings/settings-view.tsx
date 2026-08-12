@@ -174,7 +174,7 @@ function ShopTab() {
 // ─── Currency & Tax Tab ───────────────────────────────────────────────────────
 
 function CurrencyTab() {
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
   const { toast } = useToast();
   const utils = trpc.useUtils();
   const { data: shop } = trpc.shop.get.useQuery();
@@ -292,7 +292,13 @@ function CurrencyTab() {
         <div className="flex items-center gap-2.5 px-4 py-3 bg-slate-50 rounded-xl border border-slate-100">
           <p className="text-xs text-slate-500">{t("settings.preview")}</p>
           <p className="text-sm font-black text-slate-900">
-            {new Intl.NumberFormat("en-US", { style: "currency", currency: selectedCurrency, minimumFractionDigits: 2 }).format(1234.56)}
+            {/* Formatted in the shop's own locale, so the preview matches what
+                the rest of the app will actually render for this currency. */}
+            {new Intl.NumberFormat(language === "bn" ? "bn-BD-u-nu-latn" : "en-US", {
+              style: "currency",
+              currency: selectedCurrency,
+              minimumFractionDigits: 2,
+            }).format(1234.56)}
           </p>
           <span className="text-xs text-slate-400 ml-auto">{selectedCurrency}</span>
         </div>

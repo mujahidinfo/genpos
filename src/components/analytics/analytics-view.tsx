@@ -3,7 +3,7 @@ import { useState } from "react";
 import { trpc } from "@/lib/trpc/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useFormatCurrency } from "@/lib/currency-context";
+import { useFormatCurrencyExact, useFormatCurrencyCompact } from "@/lib/currency-context";
 import { useTranslation, type TranslationKey } from "@/lib/i18n/language-context";
 import {
   ResponsiveContainer,
@@ -36,7 +36,9 @@ const PERIODS: { labelKey: TranslationKey; value: number }[] = [
 ];
 
 export function AnalyticsView() {
-  const formatCurrency = useFormatCurrency();
+  const formatCurrency = useFormatCurrencyExact();
+  // Axis ticks only — tooltips carry the exact figure.
+  const formatAxis = useFormatCurrencyCompact();
   const { t } = useTranslation();
   const [days, setDays] = useState(30);
 
@@ -127,7 +129,7 @@ export function AnalyticsView() {
                   <XAxis dataKey="date" tick={{ fontSize: 11 }} />
                   <YAxis
                     tick={{ fontSize: 11 }}
-                    tickFormatter={(v) => `$${v}`}
+                    tickFormatter={(v) => formatAxis(v as number)}
                   />
                   <Tooltip formatter={(v) => formatCurrency(v as number)} />
                   <Area
@@ -158,7 +160,7 @@ export function AnalyticsView() {
                   <XAxis
                     type="number"
                     tick={{ fontSize: 11 }}
-                    tickFormatter={(v) => `$${v}`}
+                    tickFormatter={(v) => formatAxis(v as number)}
                   />
                   <YAxis
                     dataKey="name"

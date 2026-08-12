@@ -31,7 +31,15 @@ function localeFor(language: Language): string {
   return language === "bn" ? "bn-BD-u-nu-latn" : "en-US";
 }
 
-export function useFormatCurrency() {
+/**
+ * Compact notation (1234.56 → "৳1.2K"). Reserved for chart axis ticks, where
+ * exact labels collide and the precise value is available in the tooltip.
+ *
+ * Never use this for an amount someone reads as money — a total, a line item, a
+ * KPI, or a tooltip. Named explicitly so that choosing it is a decision rather
+ * than the default; `useFormatCurrencyExact` is the default.
+ */
+export function useFormatCurrencyCompact() {
   const currency = useCurrency();
   const locale = localeFor(useLanguage());
 

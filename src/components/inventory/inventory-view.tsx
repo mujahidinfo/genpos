@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { trpc } from "@/lib/trpc/client";
 import { cn } from "@/lib/utils";
-import { useFormatCurrency } from "@/lib/currency-context";
+import { useFormatCurrencyExact } from "@/lib/currency-context";
 import { useTranslation, type TranslationKey } from "@/lib/i18n/language-context";
 import type { Language } from "@/lib/i18n/translations";
 import {
@@ -61,7 +61,7 @@ function ProductDetailPanel({ productId, onClose, onEdit }: {
 }) {
   const { toast } = useToast();
   const utils = trpc.useUtils();
-  const formatCurrency = useFormatCurrency();
+  const formatCurrency = useFormatCurrencyExact();
   const { t, language } = useTranslation();
 
   const { data: product, isLoading } = trpc.products.getById.useQuery({ id: productId });
@@ -767,7 +767,7 @@ function CategoryManager({ categories, onRefresh }: {
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export function InventoryView() {
-  const formatCurrency = useFormatCurrency();
+  const formatCurrency = useFormatCurrencyExact();
   const { t } = useTranslation();
   const [tab, setTab]             = useState<"products" | "categories">("products");
   const [search, setSearch]       = useState("");

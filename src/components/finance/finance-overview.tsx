@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { trpc } from "@/lib/trpc/client";
-import { useFormatCurrency } from "@/lib/currency-context";
+import { useFormatCurrencyExact, useFormatCurrencyCompact } from "@/lib/currency-context";
 import { cn } from "@/lib/utils";
 import { useTranslation, type TranslationKey } from "@/lib/i18n/language-context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -29,7 +29,9 @@ const PIE_COLORS = [
 
 export function FinanceOverview() {
   const [days, setDays] = useState<7 | 30 | 90>(30);
-  const formatCurrency = useFormatCurrency();
+  const formatCurrency = useFormatCurrencyExact();
+  // Axis ticks only — the tooltip carries the exact figure.
+  const formatAxis = useFormatCurrencyCompact();
   const { t, language } = useTranslation();
 
   const { data, isLoading } = trpc.finance.overview.useQuery({ days });
@@ -136,7 +138,7 @@ export function FinanceOverview() {
                   tick={{ fontSize: 11, fill: "#94a3b8" }}
                   axisLine={false}
                   tickLine={false}
-                  tickFormatter={(v) => formatCurrency(v)}
+                  tickFormatter={(v) => formatAxis(v)}
                   width={60}
                 />
                 <Tooltip

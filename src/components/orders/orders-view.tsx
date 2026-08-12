@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { trpc } from "@/lib/trpc/client";
 import { formatDate, cn } from "@/lib/utils";
-import { useFormatCurrency } from "@/lib/currency-context";
+import { useFormatCurrencyExact } from "@/lib/currency-context";
 import { useTranslation, type TranslationKey } from "@/lib/i18n/language-context";
 import {
   Search, X, Clock, CheckCircle2, XCircle, RefreshCw, RotateCcw,
@@ -81,7 +81,7 @@ type DetailPanelProps = {
 function OrderDetailPanel({ order, onClose }: DetailPanelProps) {
   const { toast } = useToast();
   const utils = trpc.useUtils();
-  const formatCurrency = useFormatCurrency();
+  const formatCurrency = useFormatCurrencyExact();
   const { t } = useTranslation();
 
   const [refundAmt, setRefundAmt]       = useState<string>("");
@@ -372,7 +372,7 @@ function OrderDetailPanel({ order, onClose }: DetailPanelProps) {
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export function OrdersView() {
-  const formatCurrency = useFormatCurrency();
+  const formatCurrency = useFormatCurrencyExact();
   const { t } = useTranslation();
   const [search, setSearch]           = useState("");
   const [statusFilter, setStatusFilter] = useState<OrderStatus | "all">("all");

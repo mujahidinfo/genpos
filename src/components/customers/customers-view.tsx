@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { trpc } from "@/lib/trpc/client";
 import { cn } from "@/lib/utils";
-import { useFormatCurrency } from "@/lib/currency-context";
+import { useFormatCurrencyExact } from "@/lib/currency-context";
 import { useTranslation, type TranslationKey } from "@/lib/i18n/language-context";
 import type { Language } from "@/lib/i18n/translations";
 import {
@@ -52,7 +52,7 @@ function CustomerDetailPanel({ customerId, onClose, onEdit }: {
 }) {
   const { toast } = useToast();
   const utils = trpc.useUtils();
-  const formatCurrency = useFormatCurrency();
+  const formatCurrency = useFormatCurrencyExact();
   const { t, language } = useTranslation();
   const { data: customer, isLoading } = trpc.customers.getById.useQuery({ id: customerId });
 
@@ -387,7 +387,7 @@ function CustomerFormPanel({ customerId, onClose }: { customerId?: string; onClo
 // ─── Main View ────────────────────────────────────────────────────────────────
 
 export function CustomersView() {
-  const formatCurrency = useFormatCurrency();
+  const formatCurrency = useFormatCurrencyExact();
   const { t, language } = useTranslation();
   const [search, setSearch]   = useState("");
   const [page, setPage]       = useState(1);

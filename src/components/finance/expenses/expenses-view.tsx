@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { trpc } from "@/lib/trpc/client";
-import { useFormatCurrency } from "@/lib/currency-context";
+import { useFormatCurrencyExact } from "@/lib/currency-context";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { useTranslation, type TranslationKey } from "@/lib/i18n/language-context";
@@ -91,7 +91,7 @@ const PAGE_SIZE = 15;
 
 export function ExpensesView() {
   const { toast } = useToast();
-  const formatCurrency = useFormatCurrency();
+  const formatCurrency = useFormatCurrencyExact();
   const { t, language } = useTranslation();
   const utils = trpc.useUtils();
 
