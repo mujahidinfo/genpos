@@ -696,7 +696,7 @@ export function OrdersView() {
 
       {/* ── Order detail slide-over ────────────────────────────── */}
       {syncedSelected && (
-        <div className="fixed inset-0 z-50 flex justify-end">
+        <div className="fixed inset-0 z-[60] flex justify-end">
           {/* Backdrop */}
           <div
             role="presentation"

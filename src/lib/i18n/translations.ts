@@ -89,6 +89,7 @@ const en = {
     analytics: "Analytics",
     finance: "Finance",
     settings: "Settings",
+    more: "More",
   },
 
   // ─── Header ──────────────────────────────────────────────────────────────────
@@ -997,6 +998,7 @@ const bn: Widen<typeof en> = {
     analytics: "বিশ্লেষণ",
     finance: "অর্থব্যবস্থা",
     settings: "সেটিংস",
+    more: "আরও",
   },
 
   header: {

@@ -1116,7 +1116,7 @@ export function InventoryView() {
 
       {/* ── Slide-over panel ─────────────────────────────────────── */}
       {panelOpen && (
-        <div className="fixed inset-0 z-50 flex justify-end">
+        <div className="fixed inset-0 z-[60] flex justify-end">
           <div role="presentation" className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={closePanel} />
           <div className="relative w-full sm:w-[480px] bg-white shadow-2xl flex flex-col h-full sm:rounded-l-3xl overflow-hidden">
             {panel.mode === "detail" && (

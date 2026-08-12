@@ -3,14 +3,13 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, Package, ShoppingCart, Users, BarChart3,
-  Settings, Receipt, Menu, X, Store, Wallet,
+  Settings, Receipt, Store, Wallet,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { AuthUser } from "@/lib/auth";
-import { useState } from "react";
 import { useTranslation, type TranslationKey } from "@/lib/i18n/language-context";
 
-const navItems = [
+export const navItems = [
   { labelKey: "nav.dashboard", href: "/dashboard", icon: LayoutDashboard, roles: ["ADMIN", "CASHIER", "INVENTORY_MANAGER"] },
   { labelKey: "nav.sales", href: "/sales", icon: Receipt, roles: ["ADMIN", "CASHIER"] },
   { labelKey: "nav.orders", href: "/orders", icon: ShoppingCart, roles: ["ADMIN", "CASHIER", "INVENTORY_MANAGER"] },
@@ -21,7 +20,7 @@ const navItems = [
   { labelKey: "nav.settings", href: "/settings", icon: Settings, roles: ["ADMIN"] },
 ] as const satisfies readonly { labelKey: TranslationKey; href: string; icon: React.ElementType; roles: readonly string[] }[];
 
-type NavItem = (typeof navItems)[number];
+export type NavItem = (typeof navItems)[number];
 
 interface SidebarProps {
   user: AuthUser;
@@ -89,7 +88,6 @@ function UserSection({ user, initials }: UserSectionProps) {
 export function Sidebar({ user }: SidebarProps) {
   const pathname = usePathname();
   const { t } = useTranslation();
-  const [mobileOpen, setMobileOpen] = useState(false);
 
   const visibleItems = navItems.filter((item) =>
     (item.roles as readonly string[]).includes(user.role),
@@ -102,54 +100,18 @@ export function Sidebar({ user }: SidebarProps) {
     .slice(0, 2);
 
   return (
-    <>
-      {/* Desktop */}
-      <aside className="hidden md:flex w-60 flex-col border-r border-slate-100 bg-white">
-        <div className="flex items-center gap-3 px-5 py-5 border-b border-slate-100">
-          <div className="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center shrink-0">
-            <Store className="w-4 h-4 text-white" />
-          </div>
-          <div className="min-w-0">
-            <p className="font-bold text-slate-900 leading-none">{t("nav.appName")}</p>
-            <p className="text-xs text-slate-400 mt-0.5">{t("nav.tagline")}</p>
-          </div>
+    <aside className="hidden md:flex w-60 flex-col border-r border-slate-100 bg-white">
+      <div className="flex items-center gap-3 px-5 py-5 border-b border-slate-100">
+        <div className="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center shrink-0">
+          <Store className="w-4 h-4 text-white" />
         </div>
-        <NavContent items={visibleItems} pathname={pathname} onNavigate={() => {}} />
-        <UserSection user={user} initials={initials} />
-      </aside>
-
-      {/* Mobile trigger */}
-      <div className="md:hidden">
-        <button
-          className="fixed top-3.5 left-4 z-50 p-2 rounded-xl bg-white border border-slate-200 shadow-sm"
-          onClick={() => setMobileOpen(!mobileOpen)}
-        >
-          {mobileOpen ? <X className="h-4 w-4 text-slate-600" /> : <Menu className="h-4 w-4 text-slate-600" />}
-        </button>
-
-        {mobileOpen && (
-          <div className="fixed inset-0 z-40 flex">
-            <div className="w-64 bg-white border-r border-slate-100 flex flex-col pt-14">
-              <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-100">
-                <div className="w-7 h-7 rounded-xl bg-indigo-600 flex items-center justify-center">
-                  <Store className="w-3.5 h-3.5 text-white" />
-                </div>
-                <p className="font-bold text-slate-900">{t("nav.appName")}</p>
-              </div>
-              <NavContent
-                items={visibleItems}
-                pathname={pathname}
-                onNavigate={() => setMobileOpen(false)}
-              />
-              <UserSection user={user} initials={initials} />
-            </div>
-            <div
-              className="flex-1 bg-black/40 backdrop-blur-sm"
-              onClick={() => setMobileOpen(false)}
-            />
-          </div>
-        )}
+        <div className="min-w-0">
+          <p className="font-bold text-slate-900 leading-none">{t("nav.appName")}</p>
+          <p className="text-xs text-slate-400 mt-0.5">{t("nav.tagline")}</p>
+        </div>
       </div>
-    </>
+      <NavContent items={visibleItems} pathname={pathname} onNavigate={() => {}} />
+      <UserSection user={user} initials={initials} />
+    </aside>
   );
 }

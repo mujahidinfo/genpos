@@ -1067,8 +1067,10 @@ export function SalesView() {
       {/* ── Mobile: Floating cart bar ─────────────────────────── */}
       <div
         className={cn(
-          // Bottom offset clears the iOS home indicator (viewport-fit: cover).
-          "lg:hidden fixed bottom-[max(1rem,calc(env(safe-area-inset-bottom)+0.5rem))] left-4 right-4 z-40 transition-all duration-300",
+          // Below md the persistent bottom nav owns the safe area, so the bar
+          // floats above it; from md up (bottom nav hidden) it drops back down
+          // to sit just above the iOS home indicator (viewport-fit: cover).
+          "lg:hidden fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] md:bottom-[max(1rem,calc(env(safe-area-inset-bottom)+0.5rem))] left-4 right-4 z-40 transition-all duration-300",
           cart.length > 0 ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0 pointer-events-none"
         )}
       >
@@ -1120,7 +1122,7 @@ export function SalesView() {
 
       {/* ── Mobile: Cart bottom sheet ─────────────────────────── */}
       {cartOpen && (
-        <div className="lg:hidden fixed inset-0 z-50 flex flex-col justify-end">
+        <div className="lg:hidden fixed inset-0 z-[60] flex flex-col justify-end">
           {/* Backdrop */}
           <div
             role="presentation"
