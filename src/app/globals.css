@@ -84,6 +84,9 @@
         font-feature-settings:
             "rlig" 1,
             "calt" 1;
+        /* Tiro Bangla has only a 400 weight; allow synthetic bold so the
+           heading hierarchy survives in Bangla. */
+        font-synthesis: weight;
     }
     ::-webkit-scrollbar {
         width: 5px;
@@ -98,6 +101,93 @@
     }
     ::-webkit-scrollbar-thumb:hover {
         background: hsl(220 9% 72%);
+    }
+
+    /*
+     * iOS Safari auto-zooms the viewport when a focused form control has a
+     * computed font-size below 16px. Most fields here are `text-sm` (14px), so
+     * focusing them yanked the page in and out of zoom on every tap.
+     *
+     * The fix is to raise the font to 16px on touch devices rather than to set
+     * `maximum-scale=1` / `user-scalable=no` in the viewport meta — disabling
+     * pinch-zoom would silently break zooming for low-vision users (WCAG 1.4.4).
+     * Desktop keeps the tighter 14px type.
+     */
+    @media (pointer: coarse) {
+        input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+        select,
+        textarea {
+            font-size: 16px;
+            /* Keeps the visual rhythm from stretching now that text is larger. */
+            line-height: 1.25;
+        }
+    }
+}
+
+/* ─── Rate-sheet landing world ────────────────────────────────────────────────
+   Two spot inks on newsprint. Nothing here is used by the dashboard. */
+
+.rate-sheet {
+    --paper: #f4efe4;
+    --paper-deep: #ebe4d5;
+    --ink: #14110f;
+    --ink-soft: #4a443c;
+    --vermilion: #c8321e;
+    --rule: rgba(20, 17, 15, 0.22);
+    --rule-strong: rgba(20, 17, 15, 0.55);
+
+    background-color: var(--paper);
+    color: var(--ink);
+    /* Newsprint tooth: fine mottling so flat fields are never digitally clean. */
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E");
+}
+
+/* Bangla script hangs from a matra; so does the page. */
+.matra {
+    border-top: 2px solid var(--ink);
+}
+
+.rule-hair {
+    border-color: var(--rule);
+}
+
+/* Column rules between table cells, drawn only where a real sheet would rule. */
+.ruled-cols > * + * {
+    border-left: 1px solid var(--rule);
+}
+
+/* The date stamp: rubber-stamped, slightly off-square, never crisp. */
+.stamp {
+    color: var(--vermilion);
+    border: 2px solid var(--vermilion);
+    transform: rotate(-1.4deg);
+    opacity: 0.86;
+}
+
+/* Halftone plates print as ink on paper, not as photographs on white. */
+.plate {
+    mix-blend-mode: multiply;
+    filter: contrast(1.08);
+}
+
+@keyframes ink-settle {
+    from {
+        opacity: 0;
+        transform: translateY(0.35rem);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+.ink-settle {
+    animation: ink-settle 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ink-settle {
+        animation: none;
     }
 }
 

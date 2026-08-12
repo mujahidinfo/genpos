@@ -1,28 +1,31 @@
-import { SiteHeader } from "@/components/landing/site-header";
-import { HeroSection } from "@/components/landing/hero-section";
-import { ProblemSection } from "@/components/landing/problem-section";
-import { FeaturesSection } from "@/components/landing/features-section";
-import { HowItWorksSection } from "@/components/landing/how-it-works-section";
-import { BenefitsSection } from "@/components/landing/benefits-section";
-import { FaqSection } from "@/components/landing/faq-section";
-import { CtaSection, SiteFooter } from "@/components/landing/cta-footer";
+import { Masthead } from "@/components/landing/masthead";
+import { RateSheetHero } from "@/components/landing/rate-sheet-hero";
+import { LedgerDemo } from "@/components/landing/ledger-demo";
+import { PressProof } from "@/components/landing/press-proof";
+import { SystemIndex } from "@/components/landing/system-index";
+import { OpeningSteps } from "@/components/landing/opening-steps";
+import { ClosingBlock, Colophon } from "@/components/landing/colophon";
 import { LandingLanguageProvider } from "@/lib/i18n/landing-language-context";
 
+/**
+ * The landing page is a printed rate sheet: masthead, the day's table, the
+ * mechanism demonstrated, the product photographed, the index, the steps, the
+ * close. Every block is ruled; nothing floats.
+ */
 export function LandingPage() {
   return (
     <LandingLanguageProvider>
-      <div className="min-h-screen bg-white">
-        <SiteHeader />
+      <div className="rate-sheet min-h-screen antialiased">
+        <Masthead />
         <main>
-          <HeroSection />
-          <ProblemSection />
-          <FeaturesSection />
-          <HowItWorksSection />
-          <BenefitsSection />
-          <FaqSection />
-          <CtaSection />
+          <RateSheetHero />
+          <LedgerDemo />
+          <PressProof />
+          <SystemIndex />
+          <OpeningSteps />
+          <ClosingBlock />
         </main>
-        <SiteFooter />
+        <Colophon />
       </div>
     </LandingLanguageProvider>
   );

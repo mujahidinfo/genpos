@@ -35,3 +35,8 @@ yarn-error.log*
 # TypeScript
 *.tsbuildinfo
 next-env.d.ts
+
+# Claude Code / Impeccable local state
+.claude/settings.local.json
+.impeccable/config.local.json
+.impeccable/questions/

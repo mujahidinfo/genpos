@@ -89,7 +89,10 @@ export const ordersRouter = router({
               variantId: z.string().optional(),
               name: z.string(),
               sku: z.string().optional(),
-              price: z.number(),
+              // Sale price is set per line by the cashier (SMEs negotiate prices),
+              // so it is deliberately not checked against the catalogue price —
+              // but it must still be a sane, non-negative amount.
+              price: z.number().nonnegative().finite(),
               quantity: z.number().int().positive(),
             }),
           )
@@ -101,6 +104,12 @@ export const ordersRouter = router({
           .enum(["CASH", "CARD", "MOBILE_MONEY", "BANK_TRANSFER"])
           .default("CASH"),
         note: z.string().optional(),
+        // A POS sale is complete the moment it is rung up, so it defaults to
+        // FULFILLED. Callers that genuinely need a queue (e.g. online orders
+        // awaiting delivery) can still pass PENDING.
+        status: z
+          .enum(["PENDING", "PROCESSING", "FULFILLED"])
+          .default("FULFILLED"),
       }),
     )
     .mutation(async ({ input, ctx }) => {
@@ -110,9 +119,11 @@ export const ordersRouter = router({
       );
       let discountAmt = 0;
       if (input.discountType === "percentage")
-        discountAmt = subtotal * (input.discountValue / 100);
+        discountAmt = subtotal * (Math.min(input.discountValue, 100) / 100);
       else if (input.discountType === "fixed")
         discountAmt = input.discountValue;
+      // Never let a discount exceed the subtotal — that would book a negative order.
+      discountAmt = parseFloat(Math.min(discountAmt, subtotal).toFixed(2));
       const taxableAmount = subtotal - discountAmt;
       const taxAmt = parseFloat(
         (taxableAmount * (input.taxRate / 100)).toFixed(2),
@@ -153,7 +164,7 @@ export const ordersRouter = router({
           cashierId: ctx.user.id,
           customerId: input.customerId,
           type: input.type,
-          status: "PENDING",
+          status: input.status,
           subtotal,
           discountType: input.discountType,
           discountValue: input.discountValue,

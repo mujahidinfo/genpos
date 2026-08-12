@@ -210,6 +210,41 @@ function CustomerDetailPanel({ customerId, onClose, onEdit }: {
 type CustomerForm = { name: string; phone: string; email: string; address: string };
 const emptyForm: CustomerForm = { name: "", phone: "", email: "", address: "" };
 
+// NOTE: declared at module scope on purpose — defining it inside CustomerFormPanel
+// would create a new component type every render and remount the input on each keystroke.
+function Field({ label, name, value, onChange, error, type = "text", placeholder, hint }: {
+  label: string;
+  name: keyof CustomerForm;
+  value: string;
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  error?: string;
+  type?: string;
+  placeholder?: string;
+  hint?: string;
+}) {
+  return (
+    <div>
+      <label htmlFor={`customer-${name}`} className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">{label}</label>
+      <input
+        id={`customer-${name}`}
+        name={name}
+        type={type}
+        inputMode={type === "tel" ? "tel" : undefined}
+        placeholder={placeholder}
+        value={value}
+        onChange={onChange}
+        aria-invalid={!!error}
+        className={cn(
+          "w-full h-11 px-3 bg-white border rounded-xl text-sm text-slate-800 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors",
+          error ? "border-red-300" : "border-slate-200"
+        )}
+      />
+      {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
+      {hint && !error && <p className="text-[11px] text-slate-400 mt-1">{hint}</p>}
+    </div>
+  );
+}
+
 function CustomerFormPanel({ customerId, onClose }: { customerId?: string; onClose: () => void }) {
   const { toast } = useToast();
   const utils = trpc.useUtils();
@@ -281,27 +316,6 @@ function CustomerFormPanel({ customerId, onClose }: { customerId?: string; onClo
     );
   }
 
-  const Field = ({ label, name, type = "text", placeholder, hint }: {
-    label: string; name: keyof CustomerForm; type?: string; placeholder?: string; hint?: string;
-  }) => (
-    <div>
-      <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">{label}</label>
-      <input
-        type={type}
-        inputMode={type === "tel" ? "numeric" : undefined}
-        placeholder={placeholder}
-        value={form[name]}
-        onChange={set(name)}
-        className={cn(
-          "w-full h-11 px-3 bg-white border rounded-xl text-sm text-slate-800 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors",
-          errors[name] ? "border-red-300" : "border-slate-200"
-        )}
-      />
-      {errors[name] && <p className="text-xs text-red-500 mt-1">{errors[name]}</p>}
-      {hint && !errors[name] && <p className="text-[11px] text-slate-400 mt-1">{hint}</p>}
-    </div>
-  );
-
   return (
     <div className="flex flex-col h-full">
       <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-100 shrink-0">
@@ -315,15 +329,33 @@ function CustomerFormPanel({ customerId, onClose }: { customerId?: string; onClo
       </div>
 
       <div className="flex-1 overflow-y-auto min-h-0 px-5 py-5 space-y-4">
-        <Field label={`${t("customers.fullName")} *`} name="name" placeholder="John Doe" />
+        <Field
+          label={`${t("customers.fullName")} *`}
+          name="name"
+          value={form.name}
+          onChange={set("name")}
+          error={errors.name}
+          placeholder="John Doe"
+        />
         <Field
           label={`${t("customers.phoneNumber")} *`}
           name="phone"
           type="tel"
+          value={form.phone}
+          onChange={set("phone")}
+          error={errors.phone}
           placeholder="+1 555 000 0000"
           hint={t("customers.phoneHint")}
         />
-        <Field label={t("customers.email")} name="email" type="email" placeholder="john@example.com" />
+        <Field
+          label={t("customers.email")}
+          name="email"
+          type="email"
+          value={form.email}
+          onChange={set("email")}
+          error={errors.email}
+          placeholder="john@example.com"
+        />
         <div>
           <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">{t("customers.address")}</label>
           <textarea

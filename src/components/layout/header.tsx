@@ -28,7 +28,7 @@ export function Header({ user }: HeaderProps) {
   const initials = user.name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
 
   return (
-    <header className="h-14 border-b border-slate-100 bg-white flex items-center justify-end px-4 md:px-6 gap-2">
+    <header className="h-14 box-content pt-[env(safe-area-inset-top)] border-b border-slate-100 bg-white flex items-center justify-end px-4 md:px-6 gap-2 shrink-0">
 
       {/* Layout width toggle */}
       <button

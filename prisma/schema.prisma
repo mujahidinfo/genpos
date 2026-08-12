@@ -74,8 +74,8 @@ model Shop {
   address     String?
   phone       String?
   email       String?
-  currency    String   @default("USD")
-  language    String   @default("en")
+  currency    String   @default("BDT")
+  language    String   @default("bn")
   taxRate     Float    @default(0)
   taxName     String   @default("Tax")
   createdAt   DateTime @default(now())
@@ -202,7 +202,9 @@ model Order {
   customerId    String?
   cashierId     String
   type          OrderType     @default(WALK_IN)
-  status        OrderStatus   @default(PENDING)
+  // A POS sale is money already taken over the counter, so it lands FULFILLED.
+  // PENDING stays available for orders that genuinely await fulfillment.
+  status        OrderStatus   @default(FULFILLED)
   subtotal      Float
   discountType  String?       // "percentage" | "fixed"
   discountValue Float         @default(0)

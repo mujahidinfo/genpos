@@ -13,7 +13,9 @@ import {
   CheckCircle2, ChevronDown, ChevronUp,
   Boxes, FolderOpen, Save,
 } from "lucide-react";
+import Image from "next/image";
 import { useToast } from "@/hooks/use-toast";
+import { ProductImageUpload } from "./product-image-upload";
 import type { inferRouterOutputs } from "@trpc/server";
 import type { AppRouter } from "@/server/routers/_app";
 
@@ -139,6 +141,19 @@ function ProductDetailPanel({ productId, onClose, onEdit }: {
       </div>
 
       <div className="flex-1 overflow-y-auto min-h-0 px-5 py-5 space-y-6">
+
+        {product.imageUrl && (
+          <div className="relative aspect-[16/10] w-full rounded-xl overflow-hidden bg-slate-50 border border-slate-100">
+            <Image
+              src={product.imageUrl}
+              alt={product.name}
+              fill
+              sizes="(max-width: 640px) 100vw, 440px"
+              className="object-contain"
+              unoptimized
+            />
+          </div>
+        )}
 
         {/* Product info grid */}
         <div className="grid grid-cols-2 gap-3">
@@ -345,6 +360,43 @@ type FormState = {
   price: string; costPrice: string; categoryId: string; imageUrl: string;
 };
 
+// NOTE: declared at module scope on purpose — defining it inside ProductFormPanel
+// would create a new component type every render and remount the input on each keystroke.
+function Field({ label, name, value, onChange, error, type = "text", placeholder }: {
+  label: string;
+  name: keyof FormState;
+  value: string;
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  error?: string;
+  type?: string;
+  placeholder?: string;
+}) {
+  return (
+    <div>
+      <label htmlFor={`product-${name}`} className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+        {label}
+      </label>
+      <input
+        id={`product-${name}`}
+        name={name}
+        type={type}
+        inputMode={type === "number" ? "decimal" : undefined}
+        step={type === "number" ? "0.01" : undefined}
+        min={type === "number" ? 0 : undefined}
+        placeholder={placeholder}
+        value={value}
+        onChange={onChange}
+        aria-invalid={!!error}
+        className={cn(
+          "w-full h-11 px-3 bg-white border rounded-xl text-sm text-slate-800 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors",
+          error ? "border-red-300 ring-1 ring-red-200" : "border-slate-200"
+        )}
+      />
+      {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
+    </div>
+  );
+}
+
 function ProductFormPanel({ productId, categories, onClose }: {
   productId?: string;
   categories: Category[];
@@ -430,28 +482,6 @@ function ProductFormPanel({ productId, categories, onClose }: {
 
   const isPending = createProduct.isPending || updateProduct.isPending;
 
-  const Field = ({ label, name, type = "text", placeholder }: {
-    label: string; name: keyof FormState; type?: string; placeholder?: string;
-  }) => (
-    <div>
-      <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-        {label}
-      </label>
-      <input
-        type={type}
-        inputMode={type === "number" ? "decimal" : undefined}
-        placeholder={placeholder}
-        value={form[name]}
-        onChange={set(name)}
-        className={cn(
-          "w-full h-11 px-3 bg-white border rounded-xl text-sm text-slate-800 placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors",
-          errors[name] ? "border-red-300 ring-1 ring-red-200" : "border-slate-200"
-        )}
-      />
-      {errors[name] && <p className="text-xs text-red-500 mt-1">{errors[name]}</p>}
-    </div>
-  );
-
   if (isEdit && loadingProduct) {
     return (
       <div className="flex flex-col h-full">
@@ -486,7 +516,14 @@ function ProductFormPanel({ productId, categories, onClose }: {
       {/* Form body */}
       <div className="flex-1 overflow-y-auto min-h-0 px-5 py-5 space-y-4">
 
-        <Field label={`${t("inventory.productName")} *`} name="name" placeholder={t("inventory.namePlaceholder")} />
+        <Field
+          label={`${t("inventory.productName")} *`}
+          name="name"
+          value={form.name}
+          onChange={set("name")}
+          error={errors.name}
+          placeholder={t("inventory.namePlaceholder")}
+        />
 
         <div>
           <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
@@ -502,13 +539,43 @@ function ProductFormPanel({ productId, categories, onClose }: {
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-          <Field label={`${t("inventory.sellingPrice")} *`} name="price" type="number" placeholder="0.00" />
-          <Field label={t("inventory.costPrice")}      name="costPrice" type="number" placeholder="0.00" />
+          <Field
+            label={`${t("inventory.sellingPrice")} *`}
+            name="price"
+            type="number"
+            value={form.price}
+            onChange={set("price")}
+            error={errors.price}
+            placeholder="0.00"
+          />
+          <Field
+            label={t("inventory.costPrice")}
+            name="costPrice"
+            type="number"
+            value={form.costPrice}
+            onChange={set("costPrice")}
+            error={errors.costPrice}
+            placeholder="0.00"
+          />
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-          <Field label={t("inventory.sku")}     name="sku"     placeholder="ABC-001" />
-          <Field label={t("inventory.barcode")} name="barcode" placeholder="1234567890" />
+          <Field
+            label={t("inventory.sku")}
+            name="sku"
+            value={form.sku}
+            onChange={set("sku")}
+            error={errors.sku}
+            placeholder="ABC-001"
+          />
+          <Field
+            label={t("inventory.barcode")}
+            name="barcode"
+            value={form.barcode}
+            onChange={set("barcode")}
+            error={errors.barcode}
+            placeholder="1234567890"
+          />
         </div>
 
         <div>
@@ -527,7 +594,10 @@ function ProductFormPanel({ productId, categories, onClose }: {
           </select>
         </div>
 
-        <Field label={t("inventory.imageUrl")} name="imageUrl" placeholder="https://..." />
+        <ProductImageUpload
+          value={form.imageUrl}
+          onChange={(url) => setForm((prev) => ({ ...prev, imageUrl: url }))}
+        />
 
         {!isEdit && (
           <div className="flex gap-2.5 px-4 py-3 bg-indigo-50 rounded-xl border border-indigo-100">
@@ -908,10 +978,21 @@ export function InventoryView() {
                     >
                       <div className="flex items-start justify-between gap-1">
                         <div className={cn(
-                          "w-10 h-10 rounded-xl flex items-center justify-center shrink-0",
+                          "w-10 h-10 rounded-xl flex items-center justify-center shrink-0 overflow-hidden relative",
                           isOut ? "bg-red-50" : isLow ? "bg-amber-50" : "bg-slate-50"
                         )}>
-                          <Package className={cn("h-4 w-4", isOut ? "text-red-300" : isLow ? "text-amber-400" : "text-slate-300")} />
+                          {product.imageUrl ? (
+                            <Image
+                              src={product.imageUrl}
+                              alt=""
+                              fill
+                              sizes="40px"
+                              className="object-cover"
+                              unoptimized
+                            />
+                          ) : (
+                            <Package className={cn("h-4 w-4", isOut ? "text-red-300" : isLow ? "text-amber-400" : "text-slate-300")} />
+                          )}
                         </div>
                         <span className={cn("text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0", st.pill)}>
                           {isOut ? t("inventory.statusOut") : `${totalStock}`}

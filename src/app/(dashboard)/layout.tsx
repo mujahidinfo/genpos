@@ -5,6 +5,7 @@ import { LayoutProvider } from "@/components/layout/layout-provider";
 import { MainWrapper } from "@/components/layout/main-wrapper";
 import { CurrencyProvider } from "@/lib/currency-context";
 import { LanguageProvider } from "@/lib/i18n/language-context";
+import { InstallPrompt } from "@/components/pwa/install-prompt";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const user = await requireAuth();
@@ -12,13 +13,16 @@ export default async function DashboardLayout({ children }: { children: React.Re
     <LayoutProvider>
       <LanguageProvider>
       <CurrencyProvider>
-        <div className="flex h-screen overflow-hidden bg-background">
+        {/* h-dvh (not h-screen) so the layout tracks the shrinking viewport when
+            mobile browser chrome and the on-screen keyboard appear. */}
+        <div className="flex h-dvh overflow-hidden bg-background">
           <Sidebar user={user} />
           <div className="flex flex-col flex-1 overflow-hidden">
             <Header user={user} />
             <MainWrapper>{children}</MainWrapper>
           </div>
         </div>
+        <InstallPrompt />
       </CurrencyProvider>
       </LanguageProvider>
     </LayoutProvider>

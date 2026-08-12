@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { ShoppingBag } from "lucide-react";
+import Link from "next/link";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -35,7 +36,9 @@ export default function LoginPage() {
       <div className="w-full max-w-md space-y-6">
         <div className="flex flex-col items-center gap-2 text-center">
           <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-primary text-primary-foreground">
-            <ShoppingBag className="w-7 h-7" />
+            <Link href="/">
+              <ShoppingBag className="w-7 h-7" />
+            </Link>
           </div>
           <h1 className="text-3xl font-bold tracking-tight">GenPOS</h1>
           <p className="text-muted-foreground text-sm">Point of Sale for modern shops</p>

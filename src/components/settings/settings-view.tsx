@@ -18,6 +18,8 @@ import type { AuthUser } from "@/lib/auth";
 // ─── Currency list ─────────────────────────────────────────────────────────────
 
 const CURRENCIES = [
+  // Default currency first — most shops here never scroll past it.
+  { code: "BDT", name: "Bangladeshi Taka" },
   { code: "USD", name: "US Dollar" },
   { code: "EUR", name: "Euro" },
   { code: "GBP", name: "British Pound" },
@@ -26,7 +28,6 @@ const CURRENCIES = [
   { code: "JPY", name: "Japanese Yen" },
   { code: "CNY", name: "Chinese Yuan" },
   { code: "INR", name: "Indian Rupee" },
-  { code: "BDT", name: "Bangladeshi Taka" },
   { code: "SGD", name: "Singapore Dollar" },
   { code: "AED", name: "UAE Dirham" },
   { code: "SAR", name: "Saudi Riyal" },
@@ -128,8 +129,8 @@ function ShopTab() {
       email: form.email || undefined,
       phone: form.phone || undefined,
       address: form.address || undefined,
-      currency: shop?.currency ?? "USD",
-      language: shop?.language ?? "en",
+      currency: shop?.currency ?? "BDT",
+      language: shop?.language ?? "bn",
       taxRate: shop?.taxRate ?? 0,
       taxName: shop?.taxName ?? "Tax",
     });
@@ -179,7 +180,7 @@ function CurrencyTab() {
   const { data: shop } = trpc.shop.get.useQuery();
   const activeCurrency = useCurrency();
 
-  const [selectedCurrency, setSelectedCurrency] = useState(shop?.currency ?? "USD");
+  const [selectedCurrency, setSelectedCurrency] = useState(shop?.currency ?? "BDT");
   const [taxName, setTaxName] = useState(shop?.taxName ?? "Tax");
   const [taxRate, setTaxRate] = useState(shop?.taxRate?.toString() ?? "0");
   const [currencySearch, setCurrencySearch] = useState("");
@@ -207,7 +208,7 @@ function CurrencyTab() {
       phone: shop?.phone ?? undefined,
       address: shop?.address ?? undefined,
       currency: selectedCurrency,
-      language: shop?.language ?? "en",
+      language: shop?.language ?? "bn",
       taxRate: parseFloat(taxRate) || 0,
       taxName: taxName || "Tax",
     });
@@ -383,7 +384,7 @@ function LanguageTab() {
       >
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {LANGUAGES.map((lang) => {
-            const isSelected = (shop?.language ?? "en") === lang.code;
+            const isSelected = (shop?.language ?? "bn") === lang.code;
             return (
               <button
                 key={lang.code}
@@ -630,6 +631,35 @@ function TeamTab({ currentUser }: { currentUser: AuthUser }) {
 
 // ─── Account Tab ──────────────────────────────────────────────────────────────
 
+// NOTE: declared at module scope on purpose — defining it inside AccountTab
+// would create a new component type every render and remount the input on each keystroke.
+function PasswordInput({ label, value, onChange, show, onToggle, autoComplete }: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  show: boolean;
+  onToggle: () => void;
+  autoComplete?: string;
+}) {
+  return (
+    <Field label={label}>
+      <div className="relative">
+        <input
+          type={show ? "text" : "password"}
+          placeholder="••••••••"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          autoComplete={autoComplete}
+          className="w-full h-11 pl-3 pr-10 bg-white border border-slate-200 rounded-xl text-sm placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        />
+        <button type="button" onClick={onToggle} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700">
+          {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+        </button>
+      </div>
+    </Field>
+  );
+}
+
 function AccountTab({ user }: { user: AuthUser }) {
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -665,25 +695,6 @@ function AccountTab({ user }: { user: AuthUser }) {
   const strengthLabel = ["", t("settings.strengthWeak"), t("settings.strengthFair"), t("settings.strengthGood"), t("settings.strengthStrong")][strength];
   const strengthColor = ["", "bg-red-400", "bg-amber-400", "bg-blue-400", "bg-emerald-500"][strength];
 
-  const PasswordInput = ({ label, value, onChange, show, onToggle }: {
-    label: string; value: string; onChange: (v: string) => void; show: boolean; onToggle: () => void;
-  }) => (
-    <Field label={label}>
-      <div className="relative">
-        <input
-          type={show ? "text" : "password"}
-          placeholder="••••••••"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className="w-full h-11 pl-3 pr-10 bg-white border border-slate-200 rounded-xl text-sm placeholder:text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-        />
-        <button type="button" onClick={onToggle} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700">
-          {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-        </button>
-      </div>
-    </Field>
-  );
-
   return (
     <div className="space-y-5">
       {/* Identity card */}
@@ -718,6 +729,7 @@ function AccountTab({ user }: { user: AuthUser }) {
           onChange={(v) => setForm((p) => ({ ...p, current: v }))}
           show={showCurrent}
           onToggle={() => setShowCurrent((x) => !x)}
+          autoComplete="current-password"
         />
         <div className="h-px" />
         <PasswordInput
@@ -726,6 +738,7 @@ function AccountTab({ user }: { user: AuthUser }) {
           onChange={(v) => setForm((p) => ({ ...p, next: v }))}
           show={showNext}
           onToggle={() => setShowNext((x) => !x)}
+          autoComplete="new-password"
         />
 
         {/* Strength bar */}
@@ -748,6 +761,7 @@ function AccountTab({ user }: { user: AuthUser }) {
           onChange={(v) => setForm((p) => ({ ...p, confirm: v }))}
           show={showNext}
           onToggle={() => setShowNext((x) => !x)}
+          autoComplete="new-password"
         />
 
         {form.confirm && form.next && (

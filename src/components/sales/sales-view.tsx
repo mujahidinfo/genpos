@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import Image from "next/image";
 import { trpc } from "@/lib/trpc/client";
 import { cn } from "@/lib/utils";
-import { useFormatCurrency } from "@/lib/currency-context";
+import { useFormatCurrencyExact, useCurrencySymbol } from "@/lib/currency-context";
 import { useTranslation, type TranslationKey } from "@/lib/i18n/language-context";
 import type { Language } from "@/lib/i18n/translations";
 import {
@@ -11,6 +12,7 @@ import {
   Banknote, CreditCard, Smartphone, Building2, Tag, X,
   CheckCircle2, ChevronUp, Package, ArrowLeft, Store,
   CalendarDays, Hash, User, Phone, UserPlus,
+  RotateCcw, AlertTriangle,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -24,7 +26,12 @@ type CartItem = {
   variantId?: string;
   name: string;
   sku?: string;
+  /** Live sale price — editable per line, since SMEs often negotiate. */
   price: number;
+  /** The product's catalogue price, kept so we can show "list X" and offer a reset. */
+  listPrice: number;
+  /** Used only to warn when the cashier sells below cost. Never sent to the server. */
+  costPrice: number;
   quantity: number;
 };
 
@@ -40,6 +47,55 @@ const PAYMENT_OPTIONS: { value: PaymentMethod; labelKey: TranslationKey; icon: R
   { value: "MOBILE_MONEY", labelKey: "sales.payMobile", icon: Smartphone },
   { value: "BANK_TRANSFER", labelKey: "sales.payBank", icon: Building2 },
 ];
+
+// ─── Editable unit price ──────────────────────────────────────────────────────
+
+/**
+ * Unit-price field for a cart line. Keeps a local draft string so the cashier can
+ * type intermediate values ("1", "12.", "12.5") without the parsed number fighting
+ * the caret. Commits every parseable keystroke so totals stay live, and snaps the
+ * display back to the canonical number on blur.
+ */
+function PriceInput({ value, onCommit, symbol, belowCost, ariaLabel }: {
+  value: number;
+  onCommit: (price: number) => void;
+  symbol: string;
+  belowCost: boolean;
+  ariaLabel: string;
+}) {
+  const [draft, setDraft] = useState<string | null>(null);
+
+  const handleChange = (raw: string) => {
+    // Allow only digits with at most one decimal point.
+    if (raw !== "" && !/^\d*\.?\d*$/.test(raw)) return;
+    setDraft(raw);
+    const parsed = parseFloat(raw);
+    onCommit(Number.isFinite(parsed) && parsed >= 0 ? parsed : 0);
+  };
+
+  return (
+    <div className="relative shrink-0">
+      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-semibold text-slate-400 pointer-events-none select-none">
+        {symbol}
+      </span>
+      <input
+        type="text"
+        inputMode="decimal"
+        aria-label={ariaLabel}
+        value={draft ?? String(value)}
+        onChange={(e) => handleChange(e.target.value)}
+        onFocus={(e) => { setDraft(String(value)); e.currentTarget.select(); }}
+        onBlur={() => setDraft(null)}
+        className={cn(
+          "w-24 h-9 pl-6 pr-2 rounded-lg border bg-white text-sm font-bold tabular-nums text-right transition-colors focus:outline-none focus:ring-2",
+          belowCost
+            ? "border-amber-300 text-amber-700 focus:ring-amber-400"
+            : "border-slate-200 text-slate-900 focus:ring-indigo-500"
+        )}
+      />
+    </div>
+  );
+}
 
 // ─── Cart Content (shared between desktop panel & mobile sheet) ───────────────
 
@@ -60,6 +116,7 @@ type CartContentProps = {
   isSuccess: boolean;
   onClearCart: () => void;
   onUpdateQty: (idx: number, delta: number) => void;
+  onUpdatePrice: (idx: number, price: number) => void;
   onRemoveItem: (idx: number) => void;
   onSetShowDiscount: (v: boolean) => void;
   onSetDiscountType: (t: "percentage" | "fixed" | "none") => void;
@@ -80,13 +137,15 @@ function CartContent({
   cart, totalItems, subtotal, discountAmt, taxAmt, total, taxRate, shop,
   showDiscount, discountType, discountValue, paymentMethod,
   isPending, isSuccess,
-  onClearCart, onUpdateQty, onRemoveItem,
+  onClearCart, onUpdateQty, onUpdatePrice, onRemoveItem,
   onSetShowDiscount, onSetDiscountType, onSetDiscountValue, onSetPaymentMethod, onOpenInvoice,
   customerPhone, customerName, customerId, foundCustomer,
   onCustomerPhoneChange, onCustomerNameChange, onClearCustomer,
 }: CartContentProps) {
-  const formatCurrency = useFormatCurrency();
+  const formatCurrency = useFormatCurrencyExact();
+  const currencySymbol = useCurrencySymbol();
   const { t } = useTranslation();
+  const belowCostCount = cart.filter((i) => i.costPrice > 0 && i.price < i.costPrice).length;
   return (
     <div className="flex flex-col h-full min-h-0">
       {/* Header */}
@@ -128,47 +187,89 @@ function CartContent({
           </div>
         ) : (
           <div className="space-y-2">
-            {cart.map((item, idx) => (
-              <div key={idx} className="flex items-center gap-2 p-3 rounded-xl bg-slate-50 group">
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-slate-800 truncate leading-tight">{item.name}</p>
-                  <p className="text-xs text-slate-400 mt-0.5 tabular-nums">{formatCurrency(item.price)}</p>
-                </div>
+            {cart.map((item, idx) => {
+              const isCustomPrice = item.price !== item.listPrice;
+              const isBelowCost   = item.costPrice > 0 && item.price < item.costPrice;
 
-                {/* Qty controls — 44px touch targets */}
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <button
-                    onClick={() => onUpdateQty(idx, -1)}
-                    aria-label={t("sales.decreaseQty")}
-                    className="w-8 h-8 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:border-red-200 hover:text-red-500 active:scale-95 transition-all"
-                  >
-                    <Minus className="h-3 w-3" />
-                  </button>
-                  <span className="w-6 text-center text-sm font-bold text-slate-900 tabular-nums select-none">
-                    {item.quantity}
-                  </span>
-                  <button
-                    onClick={() => onUpdateQty(idx, 1)}
-                    aria-label={t("sales.increaseQty")}
-                    className="w-8 h-8 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:border-indigo-300 hover:text-indigo-600 active:scale-95 transition-all"
-                  >
-                    <Plus className="h-3 w-3" />
-                  </button>
-                </div>
-
-                <span className="text-sm font-bold text-slate-900 tabular-nums w-14 text-right shrink-0">
-                  {formatCurrency(item.price * item.quantity)}
-                </span>
-
-                <button
-                  onClick={() => onRemoveItem(idx)}
-                  aria-label={t("sales.removeItem")}
-                  className="w-8 h-8 rounded-xl flex items-center justify-center text-slate-300 hover:text-red-500 hover:bg-red-50 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-all shrink-0"
+              return (
+                // Keyed by identity, not index: each row now owns draft input
+                // state, which would follow the wrong product if indices shifted.
+                <div
+                  key={`${item.productId}-${item.variantId ?? "default"}`}
+                  className="p-3 rounded-xl bg-slate-50 space-y-2.5"
                 >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            ))}
+                  {/* Row 1 — name, line total, remove */}
+                  <div className="flex items-start gap-2">
+                    <p className="flex-1 min-w-0 text-sm font-semibold text-slate-800 truncate leading-tight">
+                      {item.name}
+                    </p>
+                    <span className="text-sm font-bold text-slate-900 tabular-nums shrink-0">
+                      {formatCurrency(item.price * item.quantity)}
+                    </span>
+                    <button
+                      onClick={() => onRemoveItem(idx)}
+                      aria-label={t("sales.removeItem")}
+                      className="w-6 h-6 -mt-0.5 -mr-1 rounded-lg flex items-center justify-center text-slate-300 hover:text-red-500 hover:bg-red-50 transition-colors shrink-0"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+
+                  {/* Row 2 — editable unit price, reset, qty stepper */}
+                  <div className="flex items-center gap-2">
+                    <PriceInput
+                      value={item.price}
+                      onCommit={(p) => onUpdatePrice(idx, p)}
+                      symbol={currencySymbol}
+                      belowCost={isBelowCost}
+                      ariaLabel={t("sales.editUnitPrice", { name: item.name })}
+                    />
+
+                    {isCustomPrice && (
+                      <button
+                        onClick={() => onUpdatePrice(idx, item.listPrice)}
+                        title={t("sales.resetPrice")}
+                        aria-label={t("sales.resetPrice")}
+                        className="flex items-center gap-1 h-9 px-2 rounded-lg text-[10px] font-semibold text-slate-400 hover:text-indigo-600 hover:bg-white transition-colors shrink-0"
+                      >
+                        <RotateCcw className="h-3 w-3 shrink-0" />
+                        <span className="tabular-nums whitespace-nowrap hidden sm:inline">
+                          {t("sales.listPrice", { price: formatCurrency(item.listPrice) })}
+                        </span>
+                      </button>
+                    )}
+
+                    {/* Qty stepper */}
+                    <div className="flex items-center gap-1.5 shrink-0 ml-auto">
+                      <button
+                        onClick={() => onUpdateQty(idx, -1)}
+                        aria-label={t("sales.decreaseQty")}
+                        className="w-9 h-9 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:border-red-200 hover:text-red-500 active:scale-95 transition-all"
+                      >
+                        <Minus className="h-3 w-3" />
+                      </button>
+                      <span className="w-6 text-center text-sm font-bold text-slate-900 tabular-nums select-none">
+                        {item.quantity}
+                      </span>
+                      <button
+                        onClick={() => onUpdateQty(idx, 1)}
+                        aria-label={t("sales.increaseQty")}
+                        className="w-9 h-9 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:border-indigo-300 hover:text-indigo-600 active:scale-95 transition-all"
+                      >
+                        <Plus className="h-3 w-3" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {isBelowCost && (
+                    <p className="flex items-center gap-1.5 text-[10px] font-bold text-amber-600">
+                      <AlertTriangle className="h-3 w-3 shrink-0" />
+                      {t("sales.belowCost")} · {formatCurrency(item.costPrice)}
+                    </p>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
@@ -332,6 +433,18 @@ function CartContent({
             </div>
           </div>
 
+          {/* Below-cost warning — informational, never blocks the sale */}
+          {belowCostCount > 0 && (
+            <div className="flex items-start gap-2 px-3 py-2.5 bg-amber-50 border border-amber-200 rounded-xl">
+              <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0 mt-0.5" />
+              <p className="text-[11px] font-semibold text-amber-700">
+                {belowCostCount !== 1
+                  ? t("sales.belowCostWarningPlural", { count: belowCostCount })
+                  : t("sales.belowCostWarning", { count: belowCostCount })}
+              </p>
+            </div>
+          )}
+
           {/* Charge CTA — opens invoice preview first */}
           <button
             disabled={!cart.length || isPending}
@@ -411,7 +524,7 @@ function InvoiceModal({
   taxAmt, taxRate, total, paymentMethod, shop, isPending,
   customerName, customerPhone,
 }: InvoiceModalProps) {
-  const formatCurrency = useFormatCurrency();
+  const formatCurrency = useFormatCurrencyExact();
   const { t, language } = useTranslation();
   const locale = language === "bn" ? "bn-BD" : "en-US";
   const now = new Date();
@@ -489,7 +602,14 @@ function InvoiceModal({
                   >
                     <div className="min-w-0">
                       <p className="text-sm font-semibold text-slate-800 truncate">{item.name}</p>
-                      <p className="text-xs text-slate-400 tabular-nums">{formatCurrency(item.price)} {t("sales.each")}</p>
+                      <p className="text-xs text-slate-400 tabular-nums">
+                        {formatCurrency(item.price)} {t("sales.each")}
+                        {item.price !== item.listPrice && (
+                          <span className="ml-1.5 text-slate-300 line-through">
+                            {formatCurrency(item.listPrice)}
+                          </span>
+                        )}
+                      </p>
                     </div>
                     <div className="flex items-center">
                       <span className="text-sm font-bold text-slate-600 tabular-nums w-8 text-center">
@@ -603,7 +723,7 @@ function InvoiceModal({
 
 export function SalesView() {
   const { toast } = useToast();
-  const formatCurrency = useFormatCurrency();
+  const formatCurrency = useFormatCurrencyExact();
   const { t } = useTranslation();
 
   const [search, setSearch] = useState("");
@@ -680,6 +800,8 @@ export function SalesView() {
         name: product.name,
         sku: product.sku ?? undefined,
         price: product.price,
+        listPrice: product.price,
+        costPrice: product.costPrice ?? 0,
         quantity: 1,
       }];
     });
@@ -691,6 +813,9 @@ export function SalesView() {
     if (newQty <= 0) setCart(cart.filter((_, i) => i !== idx));
     else setCart(cart.map((item, i) => i === idx ? { ...item, quantity: newQty } : item));
   };
+
+  const updatePrice = (idx: number, price: number) =>
+    setCart(cart.map((item, i) => i === idx ? { ...item, price } : item));
 
   const removeItem = (idx: number) => setCart(cart.filter((_, i) => i !== idx));
 
@@ -708,7 +833,10 @@ export function SalesView() {
   const handleCheckout = () => {
     if (!cart.length) return;
     const orderPayload = {
-      items: cart,
+      // Send only what the order needs — listPrice/costPrice are UI-side context.
+      items: cart.map(({ productId, variantId, name, sku, price, quantity }) => ({
+        productId, variantId, name, sku, price, quantity,
+      })),
       discountType: discountType === "none" ? undefined : discountType,
       discountValue,
       taxRate,
@@ -742,6 +870,7 @@ export function SalesView() {
     isSuccess: success,
     onClearCart: () => setCart([]),
     onUpdateQty: updateQty,
+    onUpdatePrice: updatePrice,
     onRemoveItem: removeItem,
     onSetShowDiscount: setShowDiscount,
     onSetDiscountType: setDiscountType,
@@ -856,15 +985,26 @@ export function SalesView() {
                     </span>
                   )}
 
-                  {/* Icon area */}
+                  {/* Image / icon area */}
                   <div className={cn(
-                    "h-12 rounded-xl flex items-center justify-center mb-3 transition-colors duration-200",
+                    "relative h-12 rounded-xl flex items-center justify-center mb-3 overflow-hidden transition-colors duration-200",
                     inCart ? "bg-indigo-100" : "bg-slate-50"
                   )}>
-                    <Package className={cn(
-                      "h-5 w-5 transition-colors duration-200",
-                      inCart ? "text-indigo-500" : "text-slate-300"
-                    )} />
+                    {product.imageUrl ? (
+                      <Image
+                        src={product.imageUrl}
+                        alt=""
+                        fill
+                        sizes="(max-width: 640px) 45vw, 200px"
+                        className="object-cover"
+                        unoptimized
+                      />
+                    ) : (
+                      <Package className={cn(
+                        "h-5 w-5 transition-colors duration-200",
+                        inCart ? "text-indigo-500" : "text-slate-300"
+                      )} />
+                    )}
                   </div>
 
                   <p className="text-sm font-semibold text-slate-800 line-clamp-2 leading-snug min-h-[2.5rem] mb-1.5">
@@ -927,7 +1067,8 @@ export function SalesView() {
       {/* ── Mobile: Floating cart bar ─────────────────────────── */}
       <div
         className={cn(
-          "lg:hidden fixed bottom-4 left-4 right-4 z-40 transition-all duration-300",
+          // Bottom offset clears the iOS home indicator (viewport-fit: cover).
+          "lg:hidden fixed bottom-[max(1rem,calc(env(safe-area-inset-bottom)+0.5rem))] left-4 right-4 z-40 transition-all duration-300",
           cart.length > 0 ? "translate-y-0 opacity-100" : "translate-y-4 opacity-0 pointer-events-none"
         )}
       >
@@ -987,7 +1128,7 @@ export function SalesView() {
             onClick={() => setCartOpen(false)}
           />
           {/* Sheet */}
-          <div className="relative bg-white rounded-t-3xl shadow-2xl flex flex-col max-h-[90dvh]">
+          <div className="relative bg-white rounded-t-3xl shadow-2xl flex flex-col max-h-[90dvh] pb-[env(safe-area-inset-bottom)]">
             {/* Drag handle */}
             <div className="flex justify-center pt-3 pb-1 shrink-0">
               <button
