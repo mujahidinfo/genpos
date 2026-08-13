@@ -251,8 +251,10 @@ export function InstallPrompt() {
       <div
         className={cn(
           "fixed z-[60] left-4 right-4 sm:left-auto sm:right-6 sm:w-[360px]",
-          // Sits above the mobile cart bar and clears the iOS home indicator.
-          "bottom-[max(1.5rem,calc(env(safe-area-inset-bottom)+1rem))]",
+          // Below md the persistent bottom nav owns the safe area, so the
+          // banner floats above it; from md up (bottom nav hidden) it drops
+          // back down, clearing only the iOS home indicator / mobile cart bar.
+          "bottom-[calc(4.5rem+env(safe-area-inset-bottom)+0.75rem)] md:bottom-[max(1.5rem,calc(env(safe-area-inset-bottom)+1rem))]",
           "animate-in slide-in-from-bottom-4 fade-in duration-300",
         )}
         role="dialog"
