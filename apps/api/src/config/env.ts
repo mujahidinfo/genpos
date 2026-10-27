@@ -11,6 +11,9 @@ const envSchema = z.object({
   REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().positive().default(30),
   // Comma-separated list of allowed browser origins, e.g. "http://localhost:3000"
   CORS_ORIGINS: z.string().default('http://localhost:3000'),
+  // Comma-separated Google OAuth client IDs (web, Android, iOS) whose ID tokens
+  // we accept. Empty = Google sign-in disabled.
+  GOOGLE_CLIENT_IDS: z.string().default(''),
 });
 
 export type Env = z.infer<typeof envSchema>;

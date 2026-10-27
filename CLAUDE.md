@@ -8,9 +8,9 @@ pnpm workspaces. Run all commands from the repo root.
 
 ```
 apps/
-  web/        # @genpos/web    — Next.js frontend (existing app; tRPC lives here for now)
-  api/        # @genpos/api    — NestJS 12 REST API + JWT auth (localhost:4000, see apps/api/README.md)
-  mobile/     # @genpos/mobile — Expo SDK 58 app (Expo Router, NativeTabs), see apps/mobile/README.md
+  web/        # @genpos/web    — Next.js frontend — PAUSED: still on the pre-tenancy schema, to be moved onto the API
+  api/        # @genpos/api    — NestJS 12 multi-tenant REST API + JWT/Google auth (localhost:4000, see apps/api/README.md)
+  mobile/     # @genpos/mobile — Expo SDK 58 POS app (barcode scanning, sign-up/onboarding), see apps/mobile/README.md
 packages/
   db/         # @genpos/db     — Prisma schema, migrations, seed, re-exported client
 ```
@@ -22,14 +22,15 @@ packages/
 ## Commands
 
 ```bash
-pnpm dev          # web (localhost:3000) + api (localhost:4000) in parallel
-pnpm dev:web      # web only
+pnpm dev          # api (localhost:4000)
+pnpm dev:web      # web only (paused — does not build on the tenant schema)
 pnpm dev:api      # api only (Swagger at localhost:4000/api/docs)
 pnpm dev:mobile   # Expo / Metro (needs the api running)
-pnpm build        # build all apps
-pnpm lint         # lint all apps
+pnpm build        # build the api
+pnpm lint         # lint api + mobile
 
 pnpm db:migrate   # prisma migrate dev
+pnpm db:deploy    # prisma migrate deploy (apply committed migrations)
 pnpm db:generate  # prisma generate (after schema changes)
 pnpm db:push      # prisma db push (no migration file)
 pnpm db:seed      # run packages/db/prisma/seed.ts
@@ -41,11 +42,12 @@ pnpm db:studio    # open Prisma Studio
 NestJS 12, **native ESM** — relative imports need the `.js` suffix. Full endpoint list in `apps/api/README.md`.
 
 - REST under `/api/v1`; every route needs `Authorization: Bearer <accessToken>` unless decorated `@Public()`
-- Roles via `@Roles('ADMIN')`; current user via `@CurrentUser()` (`src/common/decorators.ts`)
+- **Multi-tenant**: `TenantGuard` resolves the branch from the `X-Shop-Id` header; inject it with `@Tenant() tenant: TenantContext` and scope every query by `tenant.businessId` (shared data) or `tenant.shopId` (branch data). Routes not tied to a branch use `@NoTenant()`
+- Roles via `@Roles(...MANAGERS)` / `@Roles(...CATALOG_EDITORS)` / `@Roles('OWNER')` — membership roles `OWNER · MANAGER · CASHIER · INVENTORY_MANAGER`
 - Validation: zod schemas wrapped with `createZodDto` from `nestjs-zod`; use `isoDate` (not `z.coerce.date()`) for dates so Swagger generation works
 - Auth: short-lived JWT access token + rotating opaque refresh token stored SHA-256-hashed in `Session`
 - Module layout: `src/modules/<feature>/<feature>.{dto,service,controller,module}.ts`
-- Business logic is ported 1:1 from `apps/web/src/server/routers` — keep the two in sync until the web app is migrated to the API
+- Stock lives in `Inventory` (per branch × variant); every product has ≥1 variant (`isDefault` for simple products). Use `prisma.inventory.fields.lowStock` for low-stock comparisons
 
 ## Mobile (`apps/mobile`)
 
@@ -53,12 +55,16 @@ Expo SDK 58 / React Native 0.88. Read `apps/mobile/AGENTS.md` first — Expo API
 
 - Add native deps with `npx expo install <pkg>` (run inside apps/mobile), never plain `pnpm add`
 - `src/app` is routes only; signed-in area is `(app)/` with NativeTabs and one Stack per tab; auth gate via `Stack.Protected` in `src/app/_layout.tsx`
-- API calls go through `api()` in `src/lib/api-client.ts` (handles token refresh); query hooks live in `src/api/queries.ts`
+- API calls go through `api()` in `src/lib/api-client.ts` (token refresh + `X-Shop-Id`); query hooks and mutations live in `src/api/queries.ts`
+- Session (`src/lib/session.tsx`) holds user, businesses and the active branch; `useActiveShop()` gives the branch + role. Cart: `src/lib/cart.tsx`
+- Routes: `sign-in`/`sign-up`/`onboarding` at the root; signed-in app in `(app)/` = `(tabs)/` (Sell first) + POS modals (`add-item`, `new-product`, `checkout`, `branches`)
 - Response types are hand-written in `src/api/types.ts` (dates are ISO strings) — keep in sync with apps/api
 - Money: `useFormatCurrency()` from `src/lib/format.ts` (same locale rule as the web app)
 - Checks: `npx tsc --noEmit`, `npx expo lint`, `npx expo-doctor`
 
-## Web App Structure (`apps/web`)
+## Web App Structure (`apps/web`) — paused
+
+The web app still targets the pre-tenancy schema (last working on branch `chore/monorepo-structure`). Next step: move it onto the REST API.
 
 ```
 src/
@@ -114,12 +120,15 @@ Custom cookie-based sessions — **no NextAuth**.
 
 | Model | Notes |
 |-------|-------|
-| `Shop` | Single shop config (name, currency, taxRate) |
-| `User` | Email+passwordHash, role, isActive |
+| `Business` | SaaS account; currency + language shared by its branches |
+| `Shop` | A branch/outlet of a business (taxRate, allowNegativeStock) |
+| `Membership` | User ↔ Business with role; optional `shopId` pins staff to one branch |
+| `User` | Email, optional passwordHash, optional googleId, isActive |
 | `Session` | Token-based, has `expiresAt` |
 | `Category` | Product categories |
 | `Product` | price, costPrice, SKU, barcode, categoryId |
-| `ProductVariant` | Inherits from Product; has stock + lowStock threshold |
+| `ProductVariant` | Every product has ≥1; `isDefault` hidden variant for simple products |
+| `Inventory` | Stock per branch × variant (quantity, lowStock) |
 | `StockMovement` | IN / OUT / ADJUSTMENT / RETURN |
 | `Customer` | Optional; linked to orders |
 | `Order` | orderNumber, subtotal, discount, tax, total, paymentMethod, status |
@@ -130,7 +139,7 @@ Custom cookie-based sessions — **no NextAuth**.
 | `Employee` | Finance — staff with salary (MONTHLY/HOURLY/WEEKLY/ANNUALLY) |
 | `Budget` | Finance — spending limits by period and optional category |
 
-Enums: `Role`, `OrderStatus`, `OrderType`, `PaymentMethod`, `StockMovementType`, `SalaryType`, `ExpenseStatus`, `BudgetPeriod`
+Enums: `MemberRole`, `OrderStatus`, `OrderType`, `PaymentMethod`, `StockMovementType`, `SalaryType`, `ExpenseStatus`, `BudgetPeriod`
 
 ## Key Conventions
 

@@ -1,5 +1,7 @@
 import { Controller, Get, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { Tenant } from '../../common/decorators.js';
+import type { TenantContext } from '../../common/types.js';
 import { DaysQueryDto, TopProductsQueryDto } from './analytics.dto.js';
 import { AnalyticsService } from './analytics.service.js';
 
@@ -10,22 +12,28 @@ export class AnalyticsController {
   constructor(private readonly analytics: AnalyticsService) {}
 
   @Get('overview')
-  overview(@Query() query: DaysQueryDto) {
-    return this.analytics.overview(query.days);
+  overview(@Tenant() tenant: TenantContext, @Query() query: DaysQueryDto) {
+    return this.analytics.overview(tenant, query.days);
   }
 
   @Get('sales-chart')
-  salesChart(@Query() query: DaysQueryDto) {
-    return this.analytics.salesChart(query.days);
+  salesChart(@Tenant() tenant: TenantContext, @Query() query: DaysQueryDto) {
+    return this.analytics.salesChart(tenant, query.days);
   }
 
   @Get('top-products')
-  topProducts(@Query() query: TopProductsQueryDto) {
-    return this.analytics.topProducts(query.days, query.limit);
+  topProducts(
+    @Tenant() tenant: TenantContext,
+    @Query() query: TopProductsQueryDto,
+  ) {
+    return this.analytics.topProducts(tenant, query.days, query.limit);
   }
 
   @Get('revenue-by-category')
-  revenueByCategory(@Query() query: DaysQueryDto) {
-    return this.analytics.revenueByCategory(query.days);
+  revenueByCategory(
+    @Tenant() tenant: TenantContext,
+    @Query() query: DaysQueryDto,
+  ) {
+    return this.analytics.revenueByCategory(tenant, query.days);
   }
 }

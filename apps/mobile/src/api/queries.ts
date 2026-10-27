@@ -1,17 +1,21 @@
-import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import type {
   AnalyticsOverview,
+  Customer,
   Order,
   OrderStatus,
   Paginated,
+  PaymentMethod,
   Product,
   ProductDetail,
+  ScannedProduct,
+  ShopSummary,
   SalesChartPoint,
   Shop,
   TopProduct,
 } from '@/api/types';
-import { api } from '@/lib/api-client';
+import { ApiError, api } from '@/lib/api-client';
 
 const PAGE_SIZE = 20;
 
@@ -88,5 +92,90 @@ export function useOrder(id: string) {
   return useQuery({
     queryKey: ['orders', 'detail', id],
     queryFn: () => api<Order>(`/orders/${id}`),
+  });
+}
+
+// ─── POS ─────────────────────────────────────────────────────────────────────
+
+/** Barcode lookup for the scanner. Resolves null when no product has the code. */
+export async function findByBarcode(barcode: string): Promise<ScannedProduct | null> {
+  try {
+    return await api<ScannedProduct>(`/products/barcode/${encodeURIComponent(barcode)}`);
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) return null;
+    throw error;
+  }
+}
+
+export type NewProductInput = {
+  name: string;
+  price: number;
+  costPrice?: number;
+  barcode?: string;
+  stock?: number;
+  categoryId?: string;
+};
+
+export function useCreateProduct() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: NewProductInput) =>
+      api<Product>('/products', { method: 'POST', body: input }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['products'] }),
+  });
+}
+
+export type NewOrderInput = {
+  items: {
+    productId: string;
+    variantId: string;
+    name: string;
+    sku?: string;
+    price: number;
+    quantity: number;
+  }[];
+  paymentMethod: PaymentMethod;
+  amountTendered?: number;
+  discountType?: 'percentage' | 'fixed';
+  discountValue?: number;
+  taxRate: number;
+  customerId?: string;
+};
+
+export function useCreateOrder() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: NewOrderInput) => api<Order>('/orders', { method: 'POST', body: input }),
+    onSuccess: () =>
+      Promise.all(
+        [['orders'], ['products'], ['analytics']].map((queryKey) =>
+          queryClient.invalidateQueries({ queryKey }),
+        ),
+      ),
+  });
+}
+
+export function useFindOrCreateCustomer() {
+  return useMutation({
+    mutationFn: (input: { phone: string; name: string }) =>
+      api<Customer>('/customers/find-or-create', { method: 'POST', body: input }),
+  });
+}
+
+export function useCustomerLookup(phone: string) {
+  const trimmed = phone.trim();
+  return useQuery({
+    queryKey: ['customers', 'lookup', trimmed],
+    queryFn: () => api<Customer | null>('/customers/lookup', { query: { phone: trimmed } }),
+    enabled: trimmed.length >= 6,
+  });
+}
+
+// ─── Branches ────────────────────────────────────────────────────────────────
+
+export function useAddShop() {
+  return useMutation({
+    mutationFn: (input: { name: string; phone?: string; address?: string }) =>
+      api<ShopSummary>('/shops', { method: 'POST', body: input }),
   });
 }

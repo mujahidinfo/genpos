@@ -9,6 +9,7 @@ import {
   subDays,
   subMonths,
 } from 'date-fns';
+import type { TenantContext } from '../../common/types.js';
 import { round2 } from '../../common/utils.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import type { FinanceReportQueryDto } from './finance.dto.js';
@@ -16,14 +17,21 @@ import { toMonthlySalary } from './finance.helpers.js';
 
 const DEFAULT_COLOR = '#6366f1';
 
+/**
+ * Income (orders) and expenses are per branch; employees are business-wide,
+ * so the salary report covers everyone in the business.
+ */
 @Injectable()
 export class FinanceService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async overview(days: number) {
+  async overview(tenant: TenantContext, days: number) {
     const from = startOfDay(subDays(new Date(), days - 1));
     const to = endOfDay(new Date());
-    const notCancelled = { status: { not: 'CANCELLED' as const } };
+    const shopExpenses = {
+      shopId: tenant.shopId,
+      status: { not: 'CANCELLED' as const },
+    };
 
     const [
       expenseSummary,
@@ -35,32 +43,39 @@ export class FinanceService {
       monthlyTrend,
     ] = await Promise.all([
       this.prisma.expense.aggregate({
-        where: { date: { gte: from, lte: to }, ...notCancelled },
+        where: { ...shopExpenses, date: { gte: from, lte: to } },
         _sum: { amount: true },
         _count: true,
       }),
       this.prisma.order.aggregate({
-        where: { status: 'FULFILLED', createdAt: { gte: from, lte: to } },
+        where: {
+          shopId: tenant.shopId,
+          status: 'FULFILLED',
+          createdAt: { gte: from, lte: to },
+        },
         _sum: { total: true },
         _count: true,
       }),
-      this.prisma.employee.count({ where: { isActive: true } }),
-      this.prisma.budget.count(),
+      this.prisma.employee.count({
+        where: { businessId: tenant.businessId, isActive: true },
+      }),
+      this.prisma.budget.count({ where: { shopId: tenant.shopId } }),
       this.prisma.expense.findMany({
-        where: notCancelled,
+        where: shopExpenses,
         include: { category: true },
         orderBy: { date: 'desc' },
         take: 6,
       }),
       this.prisma.expense.groupBy({
         by: ['categoryId'],
-        where: { date: { gte: from, lte: to }, ...notCancelled },
+        where: { ...shopExpenses, date: { gte: from, lte: to } },
         _sum: { amount: true },
       }),
-      this.monthlyTrend(),
+      this.monthlyTrend(tenant),
     ]);
 
     const catMap = await this.expenseCategoryMap(
+      tenant,
       expenseGroups.map((e) => e.categoryId),
     );
     const expensesByCategory = expenseGroups
@@ -88,34 +103,43 @@ export class FinanceService {
     };
   }
 
-  report(input: FinanceReportQueryDto) {
+  report(tenant: TenantContext, input: FinanceReportQueryDto) {
     const from = startOfDay(input.from);
     const to = endOfDay(input.to);
     switch (input.type) {
       case 'income_statement':
-        return this.incomeStatement(from, to);
+        return this.incomeStatement(tenant, from, to);
       case 'expense':
-        return this.expenseReport(from, to, input.categoryId);
+        return this.expenseReport(tenant, from, to, input.categoryId);
       case 'employee_salary':
-        return this.salaryReport(from, to);
+        return this.salaryReport(tenant, from, to);
     }
   }
 
-  private async incomeStatement(from: Date, to: Date) {
+  private async incomeStatement(tenant: TenantContext, from: Date, to: Date) {
     const [income, expenseGroups] = await Promise.all([
       this.prisma.order.aggregate({
-        where: { status: 'FULFILLED', createdAt: { gte: from, lte: to } },
+        where: {
+          shopId: tenant.shopId,
+          status: 'FULFILLED',
+          createdAt: { gte: from, lte: to },
+        },
         _sum: { total: true, taxAmt: true, discountAmt: true },
         _count: true,
       }),
       this.prisma.expense.groupBy({
         by: ['categoryId'],
-        where: { date: { gte: from, lte: to }, status: { not: 'CANCELLED' } },
+        where: {
+          shopId: tenant.shopId,
+          date: { gte: from, lte: to },
+          status: { not: 'CANCELLED' },
+        },
         _sum: { amount: true },
       }),
     ]);
 
     const catMap = await this.expenseCategoryMap(
+      tenant,
       expenseGroups.map((e) => e.categoryId),
     );
     const rows = expenseGroups
@@ -140,9 +164,15 @@ export class FinanceService {
     };
   }
 
-  private async expenseReport(from: Date, to: Date, categoryId?: string) {
+  private async expenseReport(
+    tenant: TenantContext,
+    from: Date,
+    to: Date,
+    categoryId?: string,
+  ) {
     const items = await this.prisma.expense.findMany({
       where: {
+        shopId: tenant.shopId,
         date: { gte: from, lte: to },
         status: { not: 'CANCELLED' },
         ...(categoryId && { categoryId }),
@@ -161,17 +191,14 @@ export class FinanceService {
     };
   }
 
-  private async salaryReport(from: Date, to: Date) {
+  private async salaryReport(tenant: TenantContext, from: Date, to: Date) {
     const employees = await this.prisma.employee.findMany({
-      where: { isActive: true },
+      where: { businessId: tenant.businessId, isActive: true },
       orderBy: { name: 'asc' },
     });
 
     const diffMs = to.getTime() - from.getTime();
-    const months = Math.max(
-      1,
-      Math.round(diffMs / (1000 * 60 * 60 * 24 * 30)),
-    );
+    const months = Math.max(1, Math.round(diffMs / (1000 * 60 * 60 * 24 * 30)));
 
     const items = employees.map((e) => {
       const monthlySalary = toMonthlySalary(e.salary, e.salaryType);
@@ -196,7 +223,7 @@ export class FinanceService {
   }
 
   /** Income vs expenses for the last 6 months. */
-  private monthlyTrend() {
+  private monthlyTrend(tenant: TenantContext) {
     const months = eachMonthOfInterval({
       start: subMonths(new Date(), 5),
       end: new Date(),
@@ -208,11 +235,16 @@ export class FinanceService {
         const to = endOfMonth(month);
         const [income, expenses] = await Promise.all([
           this.prisma.order.aggregate({
-            where: { status: 'FULFILLED', createdAt: { gte: from, lte: to } },
+            where: {
+              shopId: tenant.shopId,
+              status: 'FULFILLED',
+              createdAt: { gte: from, lte: to },
+            },
             _sum: { total: true },
           }),
           this.prisma.expense.aggregate({
             where: {
+              shopId: tenant.shopId,
               date: { gte: from, lte: to },
               status: { not: 'CANCELLED' },
             },
@@ -228,9 +260,9 @@ export class FinanceService {
     );
   }
 
-  private async expenseCategoryMap(ids: string[]) {
+  private async expenseCategoryMap(tenant: TenantContext, ids: string[]) {
     const categories = await this.prisma.expenseCategory.findMany({
-      where: { id: { in: ids } },
+      where: { businessId: tenant.businessId, id: { in: ids } },
     });
     return new Map(categories.map((c) => [c.id, c]));
   }

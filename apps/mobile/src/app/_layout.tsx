@@ -44,17 +44,22 @@ function SplashScreenController() {
   return null;
 }
 
+/** signed out → auth screens · no business yet → onboarding · otherwise the app. */
 function RootNavigator() {
   const { status } = useSession();
-  const signedIn = status === 'signedIn';
 
   return (
     <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Protected guard={signedIn}>
+      <Stack.Protected guard={status === 'ready'}>
         <Stack.Screen name="(app)" />
       </Stack.Protected>
-      <Stack.Protected guard={!signedIn}>
+      <Stack.Protected guard={status === 'needsShop'}>
+        <Stack.Screen name="onboarding" />
+      </Stack.Protected>
+      {/* Direct children (not a group) so the guard can always land on sign-in. */}
+      <Stack.Protected guard={status === 'signedOut' || status === 'loading'}>
         <Stack.Screen name="sign-in" />
+        <Stack.Screen name="sign-up" options={{ animation: 'fade' }} />
       </Stack.Protected>
     </Stack>
   );

@@ -8,8 +8,13 @@ import {
   Query,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { CurrentUser } from '../../common/decorators.js';
-import type { AuthUser } from '../../common/types.js';
+import {
+  CurrentUser,
+  MANAGERS,
+  Roles,
+  Tenant,
+} from '../../common/decorators.js';
+import type { AuthUser, TenantContext } from '../../common/types.js';
 import {
   CreateOrderDto,
   CreateRefundDto,
@@ -25,27 +30,40 @@ export class OrdersController {
   constructor(private readonly orders: OrdersService) {}
 
   @Get()
-  list(@Query() query: ListOrdersQueryDto) {
-    return this.orders.list(query);
+  list(@Tenant() tenant: TenantContext, @Query() query: ListOrdersQueryDto) {
+    return this.orders.list(tenant, query);
   }
 
   @Get(':id')
-  getById(@Param('id') id: string) {
-    return this.orders.getById(id);
+  getById(@Tenant() tenant: TenantContext, @Param('id') id: string) {
+    return this.orders.getById(tenant, id);
   }
 
   @Post()
-  create(@Body() body: CreateOrderDto, @CurrentUser() user: AuthUser) {
-    return this.orders.create(body, user.id);
+  create(
+    @Tenant() tenant: TenantContext,
+    @Body() body: CreateOrderDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.orders.create(tenant, body, user.id);
   }
 
   @Patch(':id/status')
-  updateStatus(@Param('id') id: string, @Body() body: UpdateOrderStatusDto) {
-    return this.orders.updateStatus(id, body);
+  updateStatus(
+    @Tenant() tenant: TenantContext,
+    @Param('id') id: string,
+    @Body() body: UpdateOrderStatusDto,
+  ) {
+    return this.orders.updateStatus(tenant, id, body);
   }
 
+  @Roles(...MANAGERS)
   @Post(':id/refunds')
-  refund(@Param('id') id: string, @Body() body: CreateRefundDto) {
-    return this.orders.refund(id, body);
+  refund(
+    @Tenant() tenant: TenantContext,
+    @Param('id') id: string,
+    @Body() body: CreateRefundDto,
+  ) {
+    return this.orders.refund(tenant, id, body);
   }
 }

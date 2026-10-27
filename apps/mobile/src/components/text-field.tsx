@@ -1,3 +1,4 @@
+import type { ComponentRef, Ref } from 'react';
 import { StyleSheet, TextInput, View, type TextInputProps } from 'react-native';
 
 import { ThemedText } from '@/components/themed-text';
@@ -6,6 +7,7 @@ import { useTheme } from '@/hooks/use-theme';
 
 type TextFieldProps = TextInputProps & {
   label: string;
+  ref?: Ref<ComponentRef<typeof TextInput>>;
 };
 
 export function TextField({ label, style, ...rest }: TextFieldProps) {

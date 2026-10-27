@@ -9,7 +9,8 @@ import {
   Query,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { Roles } from '../../common/decorators.js';
+import { CATALOG_EDITORS, Roles, Tenant } from '../../common/decorators.js';
+import type { TenantContext } from '../../common/types.js';
 import {
   AdjustStockDto,
   CreateProductDto,
@@ -25,40 +26,52 @@ export class ProductsController {
   constructor(private readonly products: ProductsService) {}
 
   @Get()
-  list(@Query() query: ListProductsQueryDto) {
-    return this.products.list(query);
+  list(@Tenant() tenant: TenantContext, @Query() query: ListProductsQueryDto) {
+    return this.products.list(tenant, query);
   }
 
   @Get('barcode/:barcode')
-  getByBarcode(@Param('barcode') barcode: string) {
-    return this.products.getByBarcode(barcode);
+  getByBarcode(
+    @Tenant() tenant: TenantContext,
+    @Param('barcode') barcode: string,
+  ) {
+    return this.products.getByBarcode(tenant, barcode);
   }
 
   @Get(':id')
-  getById(@Param('id') id: string) {
-    return this.products.getById(id);
+  getById(@Tenant() tenant: TenantContext, @Param('id') id: string) {
+    return this.products.getById(tenant, id);
   }
 
-  @Roles('ADMIN')
+  @Roles(...CATALOG_EDITORS)
   @Post()
-  create(@Body() body: CreateProductDto) {
-    return this.products.create(body);
+  create(@Tenant() tenant: TenantContext, @Body() body: CreateProductDto) {
+    return this.products.create(tenant, body);
   }
 
-  @Roles('ADMIN')
+  @Roles(...CATALOG_EDITORS)
   @Patch(':id')
-  update(@Param('id') id: string, @Body() body: UpdateProductDto) {
-    return this.products.update(id, body);
+  update(
+    @Tenant() tenant: TenantContext,
+    @Param('id') id: string,
+    @Body() body: UpdateProductDto,
+  ) {
+    return this.products.update(tenant, id, body);
   }
 
+  @Roles(...CATALOG_EDITORS)
   @Post(':id/stock')
-  adjustStock(@Param('id') id: string, @Body() body: AdjustStockDto) {
-    return this.products.adjustStock(id, body);
+  adjustStock(
+    @Tenant() tenant: TenantContext,
+    @Param('id') id: string,
+    @Body() body: AdjustStockDto,
+  ) {
+    return this.products.adjustStock(tenant, id, body);
   }
 
-  @Roles('ADMIN')
+  @Roles(...CATALOG_EDITORS)
   @Delete(':id')
-  delete(@Param('id') id: string) {
-    return this.products.delete(id);
+  delete(@Tenant() tenant: TenantContext, @Param('id') id: string) {
+    return this.products.delete(tenant, id);
   }
 }

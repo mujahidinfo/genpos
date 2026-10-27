@@ -1,6 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import type { Prisma } from '@genpos/db';
 import { endOfDay, startOfDay } from 'date-fns';
+import type { TenantContext } from '../../common/types.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import type {
   CreateExpenseDto,
@@ -12,9 +13,10 @@ import type {
 export class ExpensesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async list(input: ListExpensesQueryDto) {
+  async list(tenant: TenantContext, input: ListExpensesQueryDto) {
     const { page, pageSize } = input;
     const where: Prisma.ExpenseWhereInput = {
+      shopId: tenant.shopId,
       ...(input.categoryId && { categoryId: input.categoryId }),
       ...(input.employeeId && { employeeId: input.employeeId }),
       ...(input.status && { status: input.status }),
@@ -56,22 +58,49 @@ export class ExpensesService {
     };
   }
 
-  create(input: CreateExpenseDto) {
+  async create(tenant: TenantContext, input: CreateExpenseDto) {
+    await this.assertRefs(tenant, input);
     return this.prisma.expense.create({
-      data: input,
+      data: {
+        ...input,
+        businessId: tenant.businessId,
+        shopId: tenant.shopId,
+      },
       include: { category: true, employee: true },
     });
   }
 
-  update(id: string, input: UpdateExpenseDto) {
+  async update(tenant: TenantContext, id: string, input: UpdateExpenseDto) {
+    await this.assertRefs(tenant, input);
     return this.prisma.expense.update({
-      where: { id },
+      where: { id, shopId: tenant.shopId },
       data: input,
       include: { category: true, employee: true },
     });
   }
 
-  delete(id: string) {
-    return this.prisma.expense.delete({ where: { id } });
+  delete(tenant: TenantContext, id: string) {
+    return this.prisma.expense.delete({ where: { id, shopId: tenant.shopId } });
+  }
+
+  /** Category and employee must belong to this business. */
+  private async assertRefs(
+    tenant: TenantContext,
+    input: { categoryId?: string; employeeId?: string | null },
+  ) {
+    const [category, employee] = await Promise.all([
+      input.categoryId
+        ? this.prisma.expenseCategory.findFirst({
+            where: { id: input.categoryId, businessId: tenant.businessId },
+          })
+        : true,
+      input.employeeId
+        ? this.prisma.employee.findFirst({
+            where: { id: input.employeeId, businessId: tenant.businessId },
+          })
+        : true,
+    ]);
+    if (!category) throw new BadRequestException('Unknown expense category');
+    if (!employee) throw new BadRequestException('Unknown employee');
   }
 }

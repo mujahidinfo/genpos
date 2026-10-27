@@ -46,6 +46,8 @@ export class CreateOrderDto extends createZodDto(
     discountValue: z.number().min(0).default(0),
     taxRate: z.number().min(0).default(0),
     paymentMethod: paymentMethodSchema.default('CASH'),
+    // Cash handed over, for the change shown on the receipt.
+    amountTendered: z.number().nonnegative().finite().optional(),
     note: z.string().optional(),
     // A POS sale is complete the moment it is rung up, so it defaults to
     // FULFILLED. Callers that genuinely need a queue (e.g. online orders

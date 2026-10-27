@@ -1,26 +1,25 @@
 import Constants from 'expo-constants';
+import { router } from 'expo-router';
 import { useState } from 'react';
 import { Alert, Platform, ScrollView, StyleSheet } from 'react-native';
 
 import { useShop } from '@/api/queries';
-import type { Role } from '@/api/types';
 import { Button } from '@/components/button';
 import { Card, DetailRow } from '@/components/card';
 import { Spacing } from '@/constants/theme';
 import { API_URL } from '@/lib/config';
-import { useCurrentUser, useSession } from '@/lib/session';
-
-const ROLE_LABEL: Record<Role, string> = {
-  ADMIN: 'Admin',
-  CASHIER: 'Cashier',
-  INVENTORY_MANAGER: 'Inventory manager',
-};
+import { ROLE_LABEL } from '@/lib/roles';
+import { useActiveShop, useCurrentUser, useSession } from '@/lib/session';
 
 export default function AccountScreen() {
   const user = useCurrentUser();
-  const { signOut } = useSession();
+  const active = useActiveShop();
+  const { signOut, workspaces } = useSession();
   const { data: shop } = useShop();
   const [signingOut, setSigningOut] = useState(false);
+
+  const branchCount = workspaces.reduce((n, w) => n + w.shops.length, 0);
+  const isOwner = active.role === 'OWNER';
 
   const doSignOut = async () => {
     setSigningOut(true);
@@ -38,21 +37,32 @@ export default function AccountScreen() {
 
   return (
     <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={styles.content}>
-      <Card title="You">
-        <DetailRow label="Name" value={user.name} emphasis />
-        <DetailRow label="Email" value={user.email} />
-        <DetailRow label="Role" value={ROLE_LABEL[user.role]} />
+      <Card title="Working in">
+        <DetailRow label="Business" value={active.businessName} emphasis />
+        <DetailRow label="Branch" value={active.name} />
+        <DetailRow label="Your role" value={ROLE_LABEL[active.role]} />
+        {(branchCount > 1 || isOwner) && (
+          <Button
+            title={branchCount > 1 ? 'Switch branch' : 'Add a branch'}
+            variant="secondary"
+            onPress={() => router.push('/branches')}
+          />
+        )}
       </Card>
 
       {shop && (
         <Card title="Shop">
-          <DetailRow label="Name" value={shop.name} emphasis />
           <DetailRow label="Currency" value={shop.currency} />
           <DetailRow label={shop.taxName} value={`${shop.taxRate}%`} />
           {shop.phone && <DetailRow label="Phone" value={shop.phone} />}
           {shop.address && <DetailRow label="Address" value={shop.address} />}
         </Card>
       )}
+
+      <Card title="You">
+        <DetailRow label="Name" value={user.name} emphasis />
+        <DetailRow label="Email" value={user.email} />
+      </Card>
 
       <Card title="App">
         <DetailRow label="Version" value={Constants.expoConfig?.version ?? '—'} />

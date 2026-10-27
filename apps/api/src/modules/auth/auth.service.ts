@@ -1,13 +1,24 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  ServiceUnavailableException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import type { User } from '@genpos/db';
 import bcrypt from 'bcryptjs';
+import { OAuth2Client } from 'google-auth-library';
 import { createHash, randomBytes } from 'node:crypto';
 import type { Env } from '../../config/env.js';
 import type { AuthUser, JwtPayload } from '../../common/types.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
-import type { ChangePasswordDto, LoginDto } from './auth.dto.js';
+import type {
+  ChangePasswordDto,
+  GoogleSignInDto,
+  LoginDto,
+  RegisterDto,
+} from './auth.dto.js';
 
 /**
  * Access tokens are short-lived JWTs. Refresh tokens are opaque random strings,
@@ -15,20 +26,109 @@ import type { ChangePasswordDto, LoginDto } from './auth.dto.js';
  */
 @Injectable()
 export class AuthService {
+  private readonly googleClientIds: string[];
+  private readonly google = new OAuth2Client();
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwt: JwtService,
     private readonly config: ConfigService<Env, true>,
-  ) {}
+  ) {
+    this.googleClientIds = config
+      .get('GOOGLE_CLIENT_IDS', { infer: true })
+      .split(',')
+      .map((id) => id.trim())
+      .filter(Boolean);
+  }
+
+  async register({ name, email, password }: RegisterDto) {
+    const existing = await this.prisma.user.findUnique({ where: { email } });
+    if (existing) {
+      throw new ConflictException(
+        existing.googleId && !existing.passwordHash
+          ? 'This email uses Google sign-in. Continue with Google instead.'
+          : 'An account with this email already exists. Sign in instead.',
+      );
+    }
+    const user = await this.prisma.user.create({
+      data: { name, email, passwordHash: await bcrypt.hash(password, 12) },
+    });
+    return this.issueTokens(user);
+  }
 
   async login({ email, password }: LoginDto) {
     const user = await this.prisma.user.findUnique({ where: { email } });
-    if (!user || !user.isActive) {
+    if (user && !user.passwordHash && user.googleId) {
+      throw new UnauthorizedException(
+        'This account uses Google sign-in. Continue with Google instead.',
+      );
+    }
+    if (!user || !user.isActive || !user.passwordHash) {
       throw new UnauthorizedException('Invalid credentials');
     }
     const valid = await bcrypt.compare(password, user.passwordHash);
     if (!valid) throw new UnauthorizedException('Invalid credentials');
 
+    return this.issueTokens(user);
+  }
+
+  /**
+   * Verifies a Google ID token (from the mobile/web Google SDK) and signs the
+   * user in, creating the account on first use. An existing email account is
+   * linked only when Google says the email is verified.
+   */
+  async googleSignIn({ idToken }: GoogleSignInDto) {
+    if (this.googleClientIds.length === 0) {
+      throw new ServiceUnavailableException('Google sign-in is not configured');
+    }
+
+    let payload;
+    try {
+      const ticket = await this.google.verifyIdToken({
+        idToken,
+        audience: this.googleClientIds,
+      });
+      payload = ticket.getPayload();
+    } catch {
+      throw new UnauthorizedException('Invalid Google token');
+    }
+    if (!payload?.sub || !payload.email) {
+      throw new UnauthorizedException('Invalid Google token');
+    }
+
+    const email = payload.email.toLowerCase();
+    let user = await this.prisma.user.findUnique({
+      where: { googleId: payload.sub },
+    });
+
+    if (!user) {
+      const byEmail = await this.prisma.user.findUnique({ where: { email } });
+      if (byEmail) {
+        if (!payload.email_verified) {
+          throw new ConflictException(
+            'An account with this email already exists. Sign in with your password.',
+          );
+        }
+        user = await this.prisma.user.update({
+          where: { id: byEmail.id },
+          data: {
+            googleId: payload.sub,
+            avatarUrl: byEmail.avatarUrl ?? payload.picture,
+          },
+        });
+      } else {
+        user = await this.prisma.user.create({
+          data: {
+            email,
+            name: payload.name ?? email.split('@')[0],
+            googleId: payload.sub,
+            avatarUrl: payload.picture,
+          },
+        });
+      }
+    }
+
+    if (!user.isActive) throw new UnauthorizedException('Account disabled');
     return this.issueTokens(user);
   }
 
@@ -63,22 +163,23 @@ export class AuthService {
     const user = await this.prisma.user.findUniqueOrThrow({
       where: { id: userId },
     });
-    const valid = await bcrypt.compare(
-      input.currentPassword,
-      user.passwordHash,
-    );
-    if (!valid) throw new UnauthorizedException('Current password incorrect');
+    if (user.passwordHash) {
+      const valid = await bcrypt.compare(
+        input.currentPassword ?? '',
+        user.passwordHash,
+      );
+      if (!valid) throw new UnauthorizedException('Current password incorrect');
+    }
 
-    const passwordHash = await bcrypt.hash(input.newPassword, 12);
     await this.prisma.user.update({
       where: { id: userId },
-      data: { passwordHash },
+      data: { passwordHash: await bcrypt.hash(input.newPassword, 12) },
     });
     return { success: true };
   }
 
   private async issueTokens(user: User) {
-    const payload: JwtPayload = { sub: user.id, role: user.role };
+    const payload: JwtPayload = { sub: user.id };
     const accessToken = await this.jwt.signAsync(payload);
     const { exp } = this.jwt.decode<{ exp: number }>(accessToken);
 
@@ -99,7 +200,7 @@ export class AuthService {
       id: user.id,
       name: user.name,
       email: user.email,
-      role: user.role,
+      avatarUrl: user.avatarUrl,
     };
     return {
       tokenType: 'Bearer' as const,

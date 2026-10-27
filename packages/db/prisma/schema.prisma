@@ -1,5 +1,14 @@
 // This is your Prisma schema file
 // Learn more: https://pris.ly/d/prisma-schema
+//
+// Tenancy model
+//   Business  — the SaaS account (one owner, many members)
+//   Shop      — a branch / outlet of a business; every business has at least one
+//   Membership— user ↔ business with a role; shopId optionally pins staff to one branch
+//
+// Business-scoped data is shared by all branches (catalog, customers, employees,
+// expense categories). Shop-scoped data belongs to one branch (stock levels,
+// stock movements, orders, expenses, budgets).
 
 generator client {
   provider = "prisma-client-js"
@@ -12,8 +21,9 @@ datasource db {
 
 // ─── Enums ───────────────────────────────────────────────────────────────────
 
-enum Role {
-  ADMIN
+enum MemberRole {
+  OWNER
+  MANAGER
   CASHIER
   INVENTORY_MANAGER
 }
@@ -65,37 +75,95 @@ enum BudgetPeriod {
   YEARLY
 }
 
-// ─── Shop ────────────────────────────────────────────────────────────────────
+// ─── Tenancy ─────────────────────────────────────────────────────────────────
+
+model Business {
+  id        String   @id @default(cuid())
+  name      String
+  // Prices in the shared catalog are in this currency, so it lives here and
+  // not per branch.
+  currency  String   @default("BDT")
+  language  String   @default("bn")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  shops             Shop[]
+  members           Membership[]
+  categories        Category[]
+  products          Product[]
+  variants          ProductVariant[]
+  customers         Customer[]
+  orders            Order[]
+  expenseCategories ExpenseCategory[]
+  employees         Employee[]
+  expenses          Expense[]
+  budgets           Budget[]
+}
 
 model Shop {
-  id          String   @id @default(cuid())
-  name        String
-  logo        String?
-  address     String?
-  phone       String?
-  email       String?
-  currency    String   @default("BDT")
-  language    String   @default("bn")
-  taxRate     Float    @default(0)
-  taxName     String   @default("Tax")
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                 String   @id @default(cuid())
+  businessId         String
+  name               String
+  logo               String?
+  address            String?
+  phone              String?
+  email              String?
+  taxRate            Float    @default(0)
+  taxName            String   @default("Tax")
+  // SME stock counts drift; never block a sale at the counter by default.
+  // Stock may go negative and shows up as needing a recount.
+  allowNegativeStock Boolean  @default(true)
+  isActive           Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  business       Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  memberships    Membership[]
+  inventory      Inventory[]
+  stockMovements StockMovement[]
+  orders         Order[]
+  expenses       Expense[]
+  budgets        Budget[]
+
+  @@index([businessId])
+}
+
+model Membership {
+  id         String     @id @default(cuid())
+  userId     String
+  businessId String
+  role       MemberRole @default(CASHIER)
+  // null = access to every branch of the business
+  shopId     String?
+  isActive   Boolean    @default(true)
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  shop     Shop?    @relation(fields: [shopId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, businessId])
+  @@index([businessId])
 }
 
 // ─── Users ───────────────────────────────────────────────────────────────────
 
 model User {
-  id           String    @id @default(cuid())
+  id           String   @id @default(cuid())
   name         String
-  email        String    @unique
-  passwordHash String
-  role         Role      @default(CASHIER)
-  isActive     Boolean   @default(true)
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  email        String   @unique
+  // null for accounts that only ever signed in with Google
+  passwordHash String?
+  googleId     String?  @unique
+  avatarUrl    String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  orders       Order[]
-  sessions     Session[]
+  memberships Membership[]
+  orders      Order[]
+  sessions    Session[]
 }
 
 model Session {
@@ -111,25 +179,30 @@ model Session {
   @@index([userId])
 }
 
-// ─── Catalog ─────────────────────────────────────────────────────────────────
+// ─── Catalog (business-wide) ─────────────────────────────────────────────────
 
 model Category {
-  id          String    @id @default(cuid())
-  name        String    @unique
+  id          String   @id @default(cuid())
+  businessId  String
+  name        String
   description String?
   color       String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
+  business Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
   products Product[]
+
+  @@unique([businessId, name])
 }
 
 model Product {
   id          String   @id @default(cuid())
+  businessId  String
   name        String
   description String?
-  sku         String?  @unique
-  barcode     String?  @unique
+  sku         String?
+  barcode     String?
   price       Float
   costPrice   Float    @default(0)
   categoryId  String?
@@ -138,36 +211,62 @@ model Product {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  business       Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
   category       Category?        @relation(fields: [categoryId], references: [id])
   variants       ProductVariant[]
   orderItems     OrderItem[]
   stockMovements StockMovement[]
 
+  // Unique per business: two shops can stock the same manufacturer barcode.
+  @@unique([businessId, sku])
+  @@unique([businessId, barcode])
   @@index([categoryId])
-  @@index([barcode])
-  @@index([sku])
 }
 
+/// Every product has at least one variant. Simple products get a single
+/// `isDefault` variant that clients don't show; stock always lives on variants.
 model ProductVariant {
-  id        String   @id @default(cuid())
-  productId String
-  name      String   // e.g. "Red / XL"
-  sku       String?  @unique
-  barcode   String?  @unique
-  price     Float?   // override parent price if set
-  stock     Int      @default(0)
-  lowStock  Int      @default(5) // alert threshold
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id         String   @id @default(cuid())
+  businessId String
+  productId  String
+  name       String // e.g. "Red / XL"
+  sku        String?
+  barcode    String?
+  price      Float? // override parent price if set
+  isDefault  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
+  business   Business    @relation(fields: [businessId], references: [id], onDelete: Cascade)
   product    Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  inventory  Inventory[]
   orderItems OrderItem[]
 
+  @@unique([businessId, sku])
+  @@unique([businessId, barcode])
   @@index([productId])
+}
+
+// ─── Stock (per branch) ──────────────────────────────────────────────────────
+
+model Inventory {
+  id        String   @id @default(cuid())
+  shopId    String
+  variantId String
+  quantity  Int      @default(0)
+  lowStock  Int      @default(5) // alert threshold
+  updatedAt DateTime @updatedAt
+
+  shop    Shop           @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  variant ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  @@unique([shopId, variantId])
+  @@index([variantId])
 }
 
 model StockMovement {
   id        String            @id @default(cuid())
+  shopId    String
   productId String
   variantId String?
   type      StockMovementType
@@ -175,57 +274,71 @@ model StockMovement {
   note      String?
   createdAt DateTime          @default(now())
 
+  shop    Shop    @relation(fields: [shopId], references: [id], onDelete: Cascade)
   product Product @relation(fields: [productId], references: [id])
 
+  @@index([shopId])
   @@index([productId])
 }
 
-// ─── Customers ───────────────────────────────────────────────────────────────
+// ─── Customers (business-wide) ───────────────────────────────────────────────
 
 model Customer {
-  id        String   @id @default(cuid())
-  name      String
-  email     String?  @unique
-  phone     String?
-  address   String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id         String   @id @default(cuid())
+  businessId String
+  name       String
+  email      String?
+  phone      String?
+  address    String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
-  orders Order[]
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  orders   Order[]
+
+  @@unique([businessId, email])
+  @@index([businessId, phone])
 }
 
-// ─── Orders ──────────────────────────────────────────────────────────────────
+// ─── Orders (per branch) ─────────────────────────────────────────────────────
 
 model Order {
-  id            String        @id @default(cuid())
-  orderNumber   String        @unique
-  customerId    String?
-  cashierId     String
-  type          OrderType     @default(WALK_IN)
+  id             String        @id @default(cuid())
+  businessId     String
+  shopId         String
+  orderNumber    String        @unique
+  customerId     String?
+  cashierId      String
+  type           OrderType     @default(WALK_IN)
   // A POS sale is money already taken over the counter, so it lands FULFILLED.
   // PENDING stays available for orders that genuinely await fulfillment.
-  status        OrderStatus   @default(FULFILLED)
-  subtotal      Float
-  discountType  String?       // "percentage" | "fixed"
-  discountValue Float         @default(0)
-  discountAmt   Float         @default(0)
-  taxRate       Float         @default(0)
-  taxAmt        Float         @default(0)
-  total         Float
-  paymentMethod PaymentMethod @default(CASH)
-  note          String?
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  status         OrderStatus   @default(FULFILLED)
+  subtotal       Float
+  discountType   String? // "percentage" | "fixed"
+  discountValue  Float         @default(0)
+  discountAmt    Float         @default(0)
+  taxRate        Float         @default(0)
+  taxAmt         Float         @default(0)
+  total          Float
+  paymentMethod  PaymentMethod @default(CASH)
+  // Cash handed over by the customer, so receipts can show change given.
+  amountTendered Float?
+  note           String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
 
+  business Business    @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  shop     Shop        @relation(fields: [shopId], references: [id], onDelete: Cascade)
   customer Customer?   @relation(fields: [customerId], references: [id])
   cashier  User        @relation(fields: [cashierId], references: [id])
   items    OrderItem[]
   refunds  Refund[]
 
+  @@index([shopId, createdAt])
+  @@index([businessId])
   @@index([customerId])
   @@index([cashierId])
   @@index([status])
-  @@index([createdAt])
 }
 
 model OrderItem {
@@ -233,14 +346,14 @@ model OrderItem {
   orderId   String
   productId String
   variantId String?
-  name      String  // snapshot at time of sale
+  name      String // snapshot at time of sale
   sku       String?
   price     Float
   quantity  Int
   total     Float
 
-  order   Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  product Product        @relation(fields: [productId], references: [id])
+  order   Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product         @relation(fields: [productId], references: [id])
   variant ProductVariant? @relation(fields: [variantId], references: [id])
 
   @@index([orderId])
@@ -262,20 +375,25 @@ model Refund {
 // ─── Finance ─────────────────────────────────────────────────────────────────
 
 model ExpenseCategory {
-  id        String    @id @default(cuid())
-  name      String    @unique
-  color     String    @default("#6366f1")
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  id         String   @id @default(cuid())
+  businessId String
+  name       String
+  color      String   @default("#6366f1")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
+  business Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
   expenses Expense[]
   budgets  Budget[]
+
+  @@unique([businessId, name])
 }
 
 model Employee {
   id         String     @id @default(cuid())
+  businessId String
   name       String
-  email      String?    @unique
+  email      String?
   phone      String?
   position   String
   salary     Float
@@ -286,46 +404,57 @@ model Employee {
   createdAt  DateTime   @default(now())
   updatedAt  DateTime   @updatedAt
 
+  business Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
   expenses Expense[]
 
-  @@index([isActive])
+  @@unique([businessId, email])
+  @@index([businessId, isActive])
 }
 
 model Expense {
-  id            String          @id @default(cuid())
+  id            String        @id @default(cuid())
+  businessId    String
+  shopId        String
   title         String
   amount        Float
   date          DateTime
   categoryId    String
   employeeId    String?
-  paymentMethod PaymentMethod   @default(CASH)
-  status        ExpenseStatus   @default(PAID)
-  isRecurring   Boolean         @default(false)
+  paymentMethod PaymentMethod @default(CASH)
+  status        ExpenseStatus @default(PAID)
+  isRecurring   Boolean       @default(false)
   notes         String?
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
 
+  business Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  shop     Shop            @relation(fields: [shopId], references: [id], onDelete: Cascade)
   category ExpenseCategory @relation(fields: [categoryId], references: [id])
   employee Employee?       @relation(fields: [employeeId], references: [id])
 
+  @@index([shopId, date])
   @@index([categoryId])
   @@index([employeeId])
-  @@index([date])
   @@index([status])
 }
 
 model Budget {
-  id         String           @id @default(cuid())
+  id         String       @id @default(cuid())
+  businessId String
+  shopId     String
   name       String
   amount     Float
-  period     BudgetPeriod     @default(MONTHLY)
+  period     BudgetPeriod @default(MONTHLY)
   startDate  DateTime
   endDate    DateTime?
   categoryId String?
-  createdAt  DateTime         @default(now())
-  updatedAt  DateTime         @updatedAt
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
 
+  business Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  shop     Shop             @relation(fields: [shopId], references: [id], onDelete: Cascade)
   category ExpenseCategory? @relation(fields: [categoryId], references: [id])
 
+  @@index([shopId])
   @@index([categoryId])
 }

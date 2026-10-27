@@ -1,4 +1,5 @@
 import { ConflictException, Injectable } from '@nestjs/common';
+import type { TenantContext } from '../../common/types.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import type { CreateEmployeeDto, UpdateEmployeeDto } from './finance.dto.js';
 import { toMonthlySalary } from './finance.helpers.js';
@@ -7,8 +8,9 @@ import { toMonthlySalary } from './finance.helpers.js';
 export class EmployeesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async list() {
+  async list(tenant: TenantContext) {
     const items = await this.prisma.employee.findMany({
+      where: { businessId: tenant.businessId },
       orderBy: [{ isActive: 'desc' }, { name: 'asc' }],
       include: { _count: { select: { expenses: true } } },
     });
@@ -20,19 +22,24 @@ export class EmployeesService {
     return { items, totalMonthlySalary };
   }
 
-  async create(input: CreateEmployeeDto) {
+  async create(tenant: TenantContext, input: CreateEmployeeDto) {
     // The web form sends "" for an empty email field.
     const email = input.email || undefined;
     if (email) {
       const existing = await this.prisma.employee.findUnique({
-        where: { email },
+        where: { businessId_email: { businessId: tenant.businessId, email } },
       });
       if (existing) throw new ConflictException('Email already in use');
     }
-    return this.prisma.employee.create({ data: { ...input, email } });
+    return this.prisma.employee.create({
+      data: { ...input, email, businessId: tenant.businessId },
+    });
   }
 
-  update(id: string, input: UpdateEmployeeDto) {
-    return this.prisma.employee.update({ where: { id }, data: input });
+  update(tenant: TenantContext, id: string, input: UpdateEmployeeDto) {
+    return this.prisma.employee.update({
+      where: { id, businessId: tenant.businessId },
+      data: input,
+    });
   }
 }

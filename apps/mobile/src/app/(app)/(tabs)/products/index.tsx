@@ -1,8 +1,10 @@
+import { router, Stack } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, FlatList, RefreshControl, View } from 'react-native';
 
 import { useProducts } from '@/api/queries';
 import { Badge } from '@/components/badge';
+import { HeaderButton } from '@/components/header-button';
 import { ListRow, ListSeparator } from '@/components/list-row';
 import { ListSearch } from '@/components/list-search';
 import { QueryState } from '@/components/query-state';
@@ -11,9 +13,12 @@ import { Spacing } from '@/constants/theme';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { useTheme } from '@/hooks/use-theme';
 import { isLowStock, totalStock, useFormatCurrency } from '@/lib/format';
+import { canEditCatalog } from '@/lib/roles';
+import { useActiveShop } from '@/lib/session';
 
 export default function ProductsScreen() {
   const theme = useTheme();
+  const shop = useActiveShop();
   const formatCurrency = useFormatCurrency();
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebouncedValue(search.trim());
@@ -23,6 +28,13 @@ export default function ProductsScreen() {
 
   return (
     <>
+      {canEditCatalog(shop.role) && (
+        <Stack.Screen
+          options={{
+            headerRight: () => <HeaderButton title="Add" onPress={() => router.push('/new-product')} />,
+          }}
+        />
+      )}
       <ListSearch placeholder="Name, SKU or barcode" onChangeText={setSearch} />
       <FlatList
         data={products}
@@ -69,7 +81,9 @@ export default function ProductsScreen() {
             onRetry={query.refetch}
             emptyTitle={debouncedSearch ? 'No matching products' : 'No products yet'}
             emptyMessage={
-              debouncedSearch ? `Nothing matches “${debouncedSearch}”.` : 'Add products from the web dashboard.'
+              debouncedSearch
+                ? `Nothing matches “${debouncedSearch}”.`
+                : 'Tap Add, or scan a new item on the Sell tab.'
             }
           />
         }

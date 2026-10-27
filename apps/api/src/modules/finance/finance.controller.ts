@@ -9,7 +9,8 @@ import {
   Query,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { Roles } from '../../common/decorators.js';
+import { MANAGERS, Roles, Tenant } from '../../common/decorators.js';
+import type { TenantContext } from '../../common/types.js';
 import { BudgetsService } from './budgets.service.js';
 import { EmployeesService } from './employees.service.js';
 import { ExpenseCategoriesService } from './expense-categories.service.js';
@@ -29,129 +30,154 @@ import {
 } from './finance.dto.js';
 import { FinanceService } from './finance.service.js';
 
-// All finance routes are ADMIN-only.
+// All finance routes are owner/manager-only.
 
 @ApiTags('finance')
 @ApiBearerAuth()
-@Roles('ADMIN')
+@Roles(...MANAGERS)
 @Controller('finance')
 export class FinanceController {
   constructor(private readonly finance: FinanceService) {}
 
   @Get('overview')
-  overview(@Query() query: FinanceOverviewQueryDto) {
-    return this.finance.overview(query.days);
+  overview(
+    @Tenant() tenant: TenantContext,
+    @Query() query: FinanceOverviewQueryDto,
+  ) {
+    return this.finance.overview(tenant, query.days);
   }
 
   @Get('report')
-  report(@Query() query: FinanceReportQueryDto) {
-    return this.finance.report(query);
+  report(
+    @Tenant() tenant: TenantContext,
+    @Query() query: FinanceReportQueryDto,
+  ) {
+    return this.finance.report(tenant, query);
   }
 }
 
 @ApiTags('finance / expense categories')
 @ApiBearerAuth()
-@Roles('ADMIN')
+@Roles(...MANAGERS)
 @Controller('finance/expense-categories')
 export class ExpenseCategoriesController {
   constructor(private readonly categories: ExpenseCategoriesService) {}
 
   @Get()
-  list() {
-    return this.categories.list();
+  list(@Tenant() tenant: TenantContext) {
+    return this.categories.list(tenant);
   }
 
   @Post()
-  create(@Body() body: CreateExpenseCategoryDto) {
-    return this.categories.create(body);
+  create(
+    @Tenant() tenant: TenantContext,
+    @Body() body: CreateExpenseCategoryDto,
+  ) {
+    return this.categories.create(tenant, body);
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() body: UpdateExpenseCategoryDto) {
-    return this.categories.update(id, body);
+  update(
+    @Tenant() tenant: TenantContext,
+    @Param('id') id: string,
+    @Body() body: UpdateExpenseCategoryDto,
+  ) {
+    return this.categories.update(tenant, id, body);
   }
 
   @Delete(':id')
-  delete(@Param('id') id: string) {
-    return this.categories.delete(id);
+  delete(@Tenant() tenant: TenantContext, @Param('id') id: string) {
+    return this.categories.delete(tenant, id);
   }
 }
 
 @ApiTags('finance / expenses')
 @ApiBearerAuth()
-@Roles('ADMIN')
+@Roles(...MANAGERS)
 @Controller('finance/expenses')
 export class ExpensesController {
   constructor(private readonly expenses: ExpensesService) {}
 
   @Get()
-  list(@Query() query: ListExpensesQueryDto) {
-    return this.expenses.list(query);
+  list(@Tenant() tenant: TenantContext, @Query() query: ListExpensesQueryDto) {
+    return this.expenses.list(tenant, query);
   }
 
   @Post()
-  create(@Body() body: CreateExpenseDto) {
-    return this.expenses.create(body);
+  create(@Tenant() tenant: TenantContext, @Body() body: CreateExpenseDto) {
+    return this.expenses.create(tenant, body);
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() body: UpdateExpenseDto) {
-    return this.expenses.update(id, body);
+  update(
+    @Tenant() tenant: TenantContext,
+    @Param('id') id: string,
+    @Body() body: UpdateExpenseDto,
+  ) {
+    return this.expenses.update(tenant, id, body);
   }
 
   @Delete(':id')
-  delete(@Param('id') id: string) {
-    return this.expenses.delete(id);
+  delete(@Tenant() tenant: TenantContext, @Param('id') id: string) {
+    return this.expenses.delete(tenant, id);
   }
 }
 
 @ApiTags('finance / employees')
 @ApiBearerAuth()
-@Roles('ADMIN')
+@Roles(...MANAGERS)
 @Controller('finance/employees')
 export class EmployeesController {
   constructor(private readonly employees: EmployeesService) {}
 
   @Get()
-  list() {
-    return this.employees.list();
+  list(@Tenant() tenant: TenantContext) {
+    return this.employees.list(tenant);
   }
 
   @Post()
-  create(@Body() body: CreateEmployeeDto) {
-    return this.employees.create(body);
+  create(@Tenant() tenant: TenantContext, @Body() body: CreateEmployeeDto) {
+    return this.employees.create(tenant, body);
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() body: UpdateEmployeeDto) {
-    return this.employees.update(id, body);
+  update(
+    @Tenant() tenant: TenantContext,
+    @Param('id') id: string,
+    @Body() body: UpdateEmployeeDto,
+  ) {
+    return this.employees.update(tenant, id, body);
   }
 }
 
 @ApiTags('finance / budgets')
 @ApiBearerAuth()
-@Roles('ADMIN')
+@Roles(...MANAGERS)
 @Controller('finance/budgets')
 export class BudgetsController {
   constructor(private readonly budgets: BudgetsService) {}
 
   @Get()
-  list() {
-    return this.budgets.list();
+  list(@Tenant() tenant: TenantContext) {
+    return this.budgets.list(tenant);
   }
 
   @Post()
-  create(@Body() body: CreateBudgetDto) {
-    return this.budgets.create(body);
+  create(@Tenant() tenant: TenantContext, @Body() body: CreateBudgetDto) {
+    return this.budgets.create(tenant, body);
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() body: UpdateBudgetDto) {
-    return this.budgets.update(id, body);
+  update(
+    @Tenant() tenant: TenantContext,
+    @Param('id') id: string,
+    @Body() body: UpdateBudgetDto,
+  ) {
+    return this.budgets.update(tenant, id, body);
   }
 
   @Delete(':id')
-  delete(@Param('id') id: string) {
-    return this.budgets.delete(id);
+  delete(@Tenant() tenant: TenantContext, @Param('id') id: string) {
+    return this.budgets.delete(tenant, id);
   }
 }

@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import type { TenantContext } from '../../common/types.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import type {
   CreateCustomerDto,
@@ -10,26 +11,26 @@ import type {
 export class CustomersService {
   constructor(private readonly prisma: PrismaService) {}
 
-  list(search?: string) {
-    const where = search
-      ? {
+  list(tenant: TenantContext, search?: string) {
+    return this.prisma.customer.findMany({
+      where: {
+        businessId: tenant.businessId,
+        ...(search && {
           OR: [
             { name: { contains: search, mode: 'insensitive' as const } },
             { email: { contains: search, mode: 'insensitive' as const } },
             { phone: { contains: search, mode: 'insensitive' as const } },
           ],
-        }
-      : {};
-    return this.prisma.customer.findMany({
-      where,
+        }),
+      },
       include: { _count: { select: { orders: true } } },
       orderBy: { name: 'asc' },
     });
   }
 
-  getById(id: string) {
+  getById(tenant: TenantContext, id: string) {
     return this.prisma.customer.findUniqueOrThrow({
-      where: { id },
+      where: { id, businessId: tenant.businessId },
       include: {
         orders: {
           orderBy: { createdAt: 'desc' },
@@ -41,31 +42,40 @@ export class CustomersService {
   }
 
   /** Partial phone match used by the POS customer lookup; null for short input. */
-  getByPhone(phone: string) {
+  getByPhone(tenant: TenantContext, phone: string) {
     const trimmed = phone.trim();
     if (trimmed.length < 4) return null;
     return this.prisma.customer.findFirst({
-      where: { phone: { contains: trimmed } },
+      where: { businessId: tenant.businessId, phone: { contains: trimmed } },
     });
   }
 
-  create(input: CreateCustomerDto) {
-    return this.prisma.customer.create({ data: input });
+  create(tenant: TenantContext, input: CreateCustomerDto) {
+    return this.prisma.customer.create({
+      data: { ...input, businessId: tenant.businessId },
+    });
   }
 
-  async findOrCreate(input: FindOrCreateCustomerDto) {
+  async findOrCreate(tenant: TenantContext, input: FindOrCreateCustomerDto) {
     const existing = await this.prisma.customer.findFirst({
-      where: { phone: input.phone },
+      where: { businessId: tenant.businessId, phone: input.phone },
     });
     if (existing) return existing;
-    return this.prisma.customer.create({ data: input });
+    return this.prisma.customer.create({
+      data: { ...input, businessId: tenant.businessId },
+    });
   }
 
-  update(id: string, input: UpdateCustomerDto) {
-    return this.prisma.customer.update({ where: { id }, data: input });
+  update(tenant: TenantContext, id: string, input: UpdateCustomerDto) {
+    return this.prisma.customer.update({
+      where: { id, businessId: tenant.businessId },
+      data: input,
+    });
   }
 
-  delete(id: string) {
-    return this.prisma.customer.delete({ where: { id } });
+  delete(tenant: TenantContext, id: string) {
+    return this.prisma.customer.delete({
+      where: { id, businessId: tenant.businessId },
+    });
   }
 }

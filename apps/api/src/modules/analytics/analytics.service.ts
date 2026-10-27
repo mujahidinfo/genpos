@@ -6,6 +6,7 @@ import {
   startOfDay,
   subDays,
 } from 'date-fns';
+import type { TenantContext } from '../../common/types.js';
 import { round2 } from '../../common/utils.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 
@@ -13,7 +14,7 @@ import { PrismaService } from '../../prisma/prisma.service.js';
 export class AnalyticsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async overview(days: number) {
+  async overview(tenant: TenantContext, days: number) {
     const from = startOfDay(subDays(new Date(), days - 1));
     const to = endOfDay(new Date());
 
@@ -25,14 +26,29 @@ export class AnalyticsService {
       lowStockCount,
     ] = await Promise.all([
       this.prisma.order.aggregate({
-        where: { status: 'FULFILLED', createdAt: { gte: from, lte: to } },
+        where: {
+          shopId: tenant.shopId,
+          status: 'FULFILLED',
+          createdAt: { gte: from, lte: to },
+        },
         _sum: { total: true },
         _count: true,
       }),
-      this.prisma.order.count({ where: { createdAt: { gte: from, lte: to } } }),
-      this.prisma.product.count({ where: { isActive: true } }),
-      this.prisma.customer.count(),
-      this.prisma.productVariant.count({ where: { stock: { lte: 5 } } }),
+      this.prisma.order.count({
+        where: { shopId: tenant.shopId, createdAt: { gte: from, lte: to } },
+      }),
+      this.prisma.product.count({
+        where: { businessId: tenant.businessId, isActive: true },
+      }),
+      this.prisma.customer.count({ where: { businessId: tenant.businessId } }),
+      // Each item against its own alert level, in this branch.
+      this.prisma.inventory.count({
+        where: {
+          shopId: tenant.shopId,
+          variant: { product: { isActive: true } },
+          quantity: { lte: this.prisma.inventory.fields.lowStock },
+        },
+      }),
     ]);
 
     return {
@@ -45,12 +61,16 @@ export class AnalyticsService {
     };
   }
 
-  async salesChart(days: number) {
+  async salesChart(tenant: TenantContext, days: number) {
     const from = startOfDay(subDays(new Date(), days - 1));
     const to = endOfDay(new Date());
 
     const orders = await this.prisma.order.findMany({
-      where: { status: 'FULFILLED', createdAt: { gte: from, lte: to } },
+      where: {
+        shopId: tenant.shopId,
+        status: 'FULFILLED',
+        createdAt: { gte: from, lte: to },
+      },
       select: { total: true, createdAt: true },
     });
 
@@ -66,12 +86,18 @@ export class AnalyticsService {
     });
   }
 
-  async topProducts(days: number, limit: number) {
+  async topProducts(tenant: TenantContext, days: number, limit: number) {
     const from = subDays(new Date(), days);
 
     const items = await this.prisma.orderItem.groupBy({
       by: ['productId', 'name'],
-      where: { order: { createdAt: { gte: from }, status: 'FULFILLED' } },
+      where: {
+        order: {
+          shopId: tenant.shopId,
+          createdAt: { gte: from },
+          status: 'FULFILLED',
+        },
+      },
       _sum: { quantity: true, total: true },
       orderBy: { _sum: { total: 'desc' } },
       take: limit,
@@ -85,11 +111,17 @@ export class AnalyticsService {
     }));
   }
 
-  async revenueByCategory(days: number) {
+  async revenueByCategory(tenant: TenantContext, days: number) {
     const from = subDays(new Date(), days);
 
     const items = await this.prisma.orderItem.findMany({
-      where: { order: { createdAt: { gte: from }, status: 'FULFILLED' } },
+      where: {
+        order: {
+          shopId: tenant.shopId,
+          createdAt: { gte: from },
+          status: 'FULFILLED',
+        },
+      },
       include: { product: { include: { category: true } } },
     });
 

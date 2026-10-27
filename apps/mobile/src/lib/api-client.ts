@@ -44,6 +44,13 @@ export function setTokens(tokens: { accessToken: string | null; refreshToken: st
 
 export const getRefreshToken = () => refreshToken;
 
+// The branch every tenant-scoped request acts on (sent as X-Shop-Id).
+let shopId: string | null = null;
+
+export function setActiveShopId(id: string | null) {
+  shopId = id;
+}
+
 /**
  * Exchange the refresh token for a new pair. Refresh tokens are single-use on the
  * server, so concurrent callers must share one in-flight request — otherwise the
@@ -99,6 +106,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
         Accept: 'application/json',
         ...(body !== undefined && { 'Content-Type': 'application/json' }),
         ...(auth && accessToken && { Authorization: `Bearer ${accessToken}` }),
+        ...(auth && shopId && { 'X-Shop-Id': shopId }),
       },
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });

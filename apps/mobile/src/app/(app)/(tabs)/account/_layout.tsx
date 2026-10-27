@@ -5,7 +5,7 @@ import { tabStackOptions } from '@/constants/navigation';
 export default function AccountLayout() {
   return (
     <Stack screenOptions={tabStackOptions}>
-      <Stack.Screen name="index" options={{ title: 'Account' }} />
+      <Stack.Screen name="index" options={{ title: 'More' }} />
     </Stack>
   );
 }

@@ -3,7 +3,7 @@
  * Only the fields the mobile app reads are listed.
  */
 
-export type Role = 'ADMIN' | 'CASHIER' | 'INVENTORY_MANAGER';
+export type Role = 'OWNER' | 'MANAGER' | 'CASHIER' | 'INVENTORY_MANAGER';
 export type OrderStatus = 'PENDING' | 'PROCESSING' | 'FULFILLED' | 'CANCELED' | 'REFUNDED';
 export type PaymentMethod = 'CASH' | 'CARD' | 'MOBILE_MONEY' | 'BANK_TRANSFER';
 export type StockMovementType = 'IN' | 'OUT' | 'ADJUSTMENT' | 'RETURN';
@@ -12,7 +12,24 @@ export type AuthUser = {
   id: string;
   name: string;
   email: string;
+  avatarUrl: string | null;
+};
+
+/** A branch the user can open. */
+export type ShopSummary = {
+  id: string;
+  name: string;
+  address: string | null;
+};
+
+/** A business the user belongs to (GET /businesses). */
+export type Workspace = {
+  id: string;
+  name: string;
+  currency: string;
+  language: string;
   role: Role;
+  shops: ShopSummary[];
 };
 
 export type AuthResponse = {
@@ -31,13 +48,18 @@ export type Paginated<T> = {
   pageSize: number;
 };
 
+/** The active branch with business-wide settings (GET /shop). */
 export type Shop = {
   id: string;
+  businessId: string;
+  businessName: string;
   name: string;
   currency: string;
   language: string;
+  role: Role;
   taxRate: number;
   taxName: string;
+  allowNegativeStock: boolean;
   address: string | null;
   phone: string | null;
   email: string | null;
@@ -55,6 +77,9 @@ export type ProductVariant = {
   sku: string | null;
   barcode: string | null;
   price: number | null;
+  /** Hidden variant of a simple (single) product. */
+  isDefault: boolean;
+  /** Stock in the active branch. */
   stock: number;
   lowStock: number;
 };
@@ -83,6 +108,9 @@ export type StockMovement = {
 };
 
 export type ProductDetail = Product & { stockMovements: StockMovement[] };
+
+/** GET /products/barcode/:code — which variant the scanned code points at. */
+export type ScannedProduct = Product & { matchedVariantId: string | null };
 
 export type Customer = {
   id: string;
@@ -119,6 +147,7 @@ export type Order = {
   taxAmt: number;
   total: number;
   paymentMethod: PaymentMethod;
+  amountTendered: number | null;
   note: string | null;
   createdAt: string;
   customer: Customer | null;

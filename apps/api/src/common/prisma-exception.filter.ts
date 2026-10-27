@@ -11,10 +11,7 @@ import type { Response } from 'express';
 const PRISMA_ERRORS: Record<string, [number, string]> = {
   P2025: [HttpStatus.NOT_FOUND, 'Resource not found'],
   P2002: [HttpStatus.CONFLICT, 'Resource already exists'],
-  P2003: [
-    HttpStatus.BAD_REQUEST,
-    'Operation conflicts with related records',
-  ],
+  P2003: [HttpStatus.BAD_REQUEST, 'Operation conflicts with related records'],
 };
 
 /** Maps common Prisma errors to proper HTTP responses instead of 500s. */

@@ -8,7 +8,8 @@ import {
   Post,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { Roles } from '../../common/decorators.js';
+import { CATALOG_EDITORS, Roles, Tenant } from '../../common/decorators.js';
+import type { TenantContext } from '../../common/types.js';
 import { CreateCategoryDto, UpdateCategoryDto } from './categories.dto.js';
 import { CategoriesService } from './categories.service.js';
 
@@ -19,25 +20,29 @@ export class CategoriesController {
   constructor(private readonly categories: CategoriesService) {}
 
   @Get()
-  list() {
-    return this.categories.list();
+  list(@Tenant() tenant: TenantContext) {
+    return this.categories.list(tenant);
   }
 
-  @Roles('ADMIN')
+  @Roles(...CATALOG_EDITORS)
   @Post()
-  create(@Body() body: CreateCategoryDto) {
-    return this.categories.create(body);
+  create(@Tenant() tenant: TenantContext, @Body() body: CreateCategoryDto) {
+    return this.categories.create(tenant, body);
   }
 
-  @Roles('ADMIN')
+  @Roles(...CATALOG_EDITORS)
   @Patch(':id')
-  update(@Param('id') id: string, @Body() body: UpdateCategoryDto) {
-    return this.categories.update(id, body);
+  update(
+    @Tenant() tenant: TenantContext,
+    @Param('id') id: string,
+    @Body() body: UpdateCategoryDto,
+  ) {
+    return this.categories.update(tenant, id, body);
   }
 
-  @Roles('ADMIN')
+  @Roles(...CATALOG_EDITORS)
   @Delete(':id')
-  delete(@Param('id') id: string) {
-    return this.categories.delete(id);
+  delete(@Tenant() tenant: TenantContext, @Param('id') id: string) {
+    return this.categories.delete(tenant, id);
   }
 }

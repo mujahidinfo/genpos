@@ -19,9 +19,15 @@ export default function AppTabs() {
       }}
       // Always show every label — clearer at the counter than icon-only tabs.
       labelVisibilityMode="labeled">
-      <NativeTabs.Trigger name="(home)">
-        <NativeTabs.Trigger.Label>Home</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon sf={{ default: 'house', selected: 'house.fill' }} md="home" />
+      {/* Selling is the job most opens of the app are for, so it comes first. */}
+      <NativeTabs.Trigger name="(sell)">
+        <NativeTabs.Trigger.Label>Sell</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon sf={{ default: 'barcode.viewfinder', selected: 'barcode.viewfinder' }} md="barcode_scanner" />
+      </NativeTabs.Trigger>
+
+      <NativeTabs.Trigger name="dashboard">
+        <NativeTabs.Trigger.Label>Today</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon sf={{ default: 'chart.bar', selected: 'chart.bar.fill' }} md="insights" />
       </NativeTabs.Trigger>
 
       <NativeTabs.Trigger name="products">
@@ -35,7 +41,7 @@ export default function AppTabs() {
       </NativeTabs.Trigger>
 
       <NativeTabs.Trigger name="account">
-        <NativeTabs.Trigger.Label>Account</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Label>More</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon
           sf={{ default: 'person.crop.circle', selected: 'person.crop.circle.fill' }}
           md="account_circle"

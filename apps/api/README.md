@@ -1,48 +1,62 @@
 # @genpos/api
 
-Standalone REST backend for GenPOS — NestJS 12 (native ESM) · Prisma via `@genpos/db` · zod v4 validation (`nestjs-zod`) · JWT auth.
+Multi-tenant REST backend for GenPOS — NestJS 12 (native ESM) · Prisma via `@genpos/db` · zod v4 validation (`nestjs-zod`) · JWT auth · Google sign-in.
 
 ## Run
 
 ```bash
-cp apps/api/.env.example apps/api/.env   # set DATABASE_URL + JWT_SECRET
+cp apps/api/.env.example apps/api/.env   # DATABASE_URL, JWT_SECRET, optional GOOGLE_CLIENT_IDS
+pnpm db:deploy                           # apply migrations
 pnpm dev:api                             # http://localhost:4000 (watch mode)
-pnpm build:api && pnpm --filter @genpos/api start:prod
 ```
 
-- Base URL: `http://localhost:4000/api/v1`
-- Swagger UI: `http://localhost:4000/api/docs` (disabled when `NODE_ENV=production`)
-- Health: `GET /api/v1/health` → `{ status, db }`
+- Base URL: `http://localhost:4000/api/v1` · Swagger UI: `/api/docs` (not in production) · Health: `GET /api/v1/health`
+
+## Tenancy
+
+```
+User ──Membership(role, optional shopId)──▶ Business ──▶ Shop (branch) …
+```
+
+- **Business** = the SaaS account. Catalog, customers, employees and expense categories are shared by all its branches.
+- **Shop** = a branch/outlet. Stock (`Inventory`), stock movements, orders, expenses and budgets belong to one branch.
+- Every tenant route resolves the active branch from the **`X-Shop-Id`** header (`TenantGuard`). A user with exactly one branch may omit it. Membership is checked on every request, so other businesses' data is unreachable.
+- Roles: `OWNER` · `MANAGER` · `CASHIER` · `INVENTORY_MANAGER`. A membership with `shopId` is pinned to that branch.
+- `allowNegativeStock` (per branch, default **on**): a sale is never blocked at the counter; stock goes negative and shows as low/out for a recount. Turn off to block oversells.
 
 ## Auth
 
-All routes require `Authorization: Bearer <accessToken>` unless marked `@Public()`.
-
 | Endpoint | Body | Notes |
 |---|---|---|
-| `POST /auth/login` | `{ email, password }` | Returns `accessToken`, `refreshToken`, expiry times, `user` |
-| `POST /auth/refresh` | `{ refreshToken }` | **Rotates**: old refresh token is invalidated, new pair returned |
-| `POST /auth/logout` | `{ refreshToken }` | Public, so it works with an expired access token |
-| `GET /auth/me` | — | Current user |
-| `PATCH /auth/password` | `{ currentPassword, newPassword }` | |
+| `POST /auth/register` | `{ name, email, password }` | Password ≥ 8 chars. New users have no business → onboarding |
+| `POST /auth/login` | `{ email, password }` | |
+| `POST /auth/google` | `{ idToken }` | Verifies a Google ID token against `GOOGLE_CLIENT_IDS`; creates or links the account. 503 when not configured |
+| `POST /auth/refresh` | `{ refreshToken }` | Rotates: old refresh token is invalidated |
+| `POST /auth/logout` | `{ refreshToken }` | Public, works with an expired access token |
+| `GET /auth/me` · `PATCH /auth/password` | | Google-only accounts can set a first password without `currentPassword` |
 
-- Access token: JWT signed with `JWT_SECRET`, lifetime `JWT_ACCESS_TTL` (default `15m`).
-- Refresh token: opaque random string, stored **only as a SHA-256 hash** in the `Session` table, lifetime `REFRESH_TOKEN_TTL_DAYS` (default 30).
-- The user is re-loaded on every request, so deactivating a user or changing their role takes effect immediately.
-- Roles are enforced with `@Roles('ADMIN')` on controllers/handlers (global `RolesGuard`).
+Access token: JWT (`JWT_ACCESS_TTL`, default 15m). Refresh token: opaque, stored SHA-256-hashed in `Session` (`REFRESH_TOKEN_TTL_DAYS`, default 30). Credential endpoints are rate-limited to 10/min per IP.
 
 ## Endpoints
 
 | Resource | Routes | Roles |
 |---|---|---|
-| shop | `GET /shop`, `PUT /shop`, `PATCH /shop/language` | writes: ADMIN |
-| users | `GET/POST /users`, `PATCH /users/:id` | ADMIN |
-| categories | `GET/POST /categories`, `PATCH/DELETE /categories/:id` | writes: ADMIN |
-| products | `GET /products?search&categoryId&lowStock&page&pageSize`, `GET /products/:id`, `GET /products/barcode/:barcode`, `POST /products`, `PATCH/DELETE /products/:id`, `POST /products/:id/stock` | create/update/delete: ADMIN |
-| customers | `GET /customers?search`, `GET /customers/lookup?phone`, `GET/PATCH/DELETE /customers/:id`, `POST /customers`, `POST /customers/find-or-create` | delete: ADMIN |
-| orders | `GET /orders?status&search&from&to&page&pageSize`, `GET /orders/:id`, `POST /orders`, `PATCH /orders/:id/status`, `POST /orders/:id/refunds` | any |
+| businesses | `GET /businesses` (my businesses + branches), `POST /businesses` (onboarding: business + first branch) | any signed-in user, no `X-Shop-Id` |
+| shops | `GET /shops`, `POST /shops` (add branch) | add: OWNER |
+| shop | `GET /shop` (active branch + business currency/language/role), `PUT /shop`, `PATCH /shop/language` | writes: OWNER, MANAGER |
+| members | `GET /members`, `POST /members` (add staff, optional `shopId`), `PATCH /members/:id` | OWNER, MANAGER |
+| categories | `GET/POST /categories`, `PATCH/DELETE /categories/:id` | writes: catalog editors |
+| products | `GET /products?search&categoryId&lowStock&page&pageSize`, `GET /products/:id`, `GET /products/barcode/:code`, `POST /products`, `PATCH/DELETE /products/:id`, `POST /products/:id/stock` | writes: catalog editors |
+| customers | `GET /customers?search`, `GET /customers/lookup?phone`, `GET/PATCH /customers/:id`, `POST /customers`, `POST /customers/find-or-create`, `DELETE /customers/:id` | delete: OWNER, MANAGER |
+| orders | `GET /orders?…`, `GET /orders/:id`, `POST /orders`, `PATCH /orders/:id/status`, `POST /orders/:id/refunds` | refunds: OWNER, MANAGER |
 | analytics | `GET /analytics/{overview,sales-chart,top-products,revenue-by-category}?days` | any |
-| finance | `GET /finance/overview?days`, `GET /finance/report?type&from&to&categoryId`, CRUD under `/finance/{expense-categories,expenses,employees,budgets}` | ADMIN |
+| finance | `GET /finance/overview`, `GET /finance/report`, CRUD under `/finance/{expense-categories,expenses,employees,budgets}` | OWNER, MANAGER |
+
+Catalog editors = OWNER, MANAGER, INVENTORY_MANAGER.
+
+**Products & stock.** Every product has ≥ 1 variant; a simple product gets one hidden `isDefault` variant, so stock always lives on variants. Responses flatten the active branch's inventory onto each variant as `stock` / `lowStock`. `POST /products` accepts `stock` for simple products. Barcodes are unique per business across products *and* variants (409 names the clashing product).
+
+**POS scan.** `GET /products/barcode/:code` → the product plus `matchedVariantId` (the variant to sell). 404 = unknown barcode, so the client offers "add product". `POST /orders` lines may omit `variantId` for simple products; `amountTendered` records cash handed over.
 
 Dates in query/body are ISO strings (`2026-10-27` or `2026-10-27T10:00:00Z`).
 
@@ -51,15 +65,13 @@ Dates in query/body are ISO strings (`2026-10-27` or `2026-10-27T10:00:00Z`).
 ```
 src/
   main.ts                    # bootstrap: /api/v1 prefix, CORS, Swagger
-  app.module.ts              # global pipe (zod), guards (JWT → roles), Prisma error filter
+  app.module.ts              # global pipe (zod), guards (throttle → JWT → tenant → roles), Prisma error filter
   config/env.ts              # zod-validated environment
   prisma/                    # PrismaService (extends client from @genpos/db)
-  common/                    # decorators (@Public, @Roles, @CurrentUser), guards, filter, utils
-  modules/<feature>/
-    <feature>.dto.ts         # zod schemas → DTO classes via createZodDto
-    <feature>.service.ts     # business logic (ported from apps/web tRPC routers)
-    <feature>.controller.ts
-    <feature>.module.ts
+  common/
+    decorators.ts            # @Public, @NoTenant, @Roles, @CurrentUser, @Tenant, MANAGERS, CATALOG_EDITORS
+    guards.ts                # JwtAuthGuard, TenantGuard, RolesGuard
+  modules/<feature>/<feature>.{dto,service,controller,module}.ts
 ```
 
-Conventions: ESM imports use the `.js` suffix; Prisma errors P2025/P2002/P2003 map to 404/409/400 automatically.
+Every service takes the `TenantContext` and scopes queries by `businessId` (shared data) or `shopId` (branch data). Use `where: { id, businessId }` / `{ id, shopId }` for id-based updates and deletes.
