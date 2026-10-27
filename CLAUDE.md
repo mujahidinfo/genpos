@@ -9,21 +9,24 @@ pnpm workspaces. Run all commands from the repo root.
 ```
 apps/
   web/        # @genpos/web    — Next.js frontend (existing app; tRPC lives here for now)
-  api/        # @genpos/api    — NestJS backend (to be scaffolded)
+  api/        # @genpos/api    — NestJS 12 REST API + JWT auth (localhost:4000, see apps/api/README.md)
   mobile/     # @genpos/mobile — React Native / Expo app (to be scaffolded)
 packages/
   db/         # @genpos/db     — Prisma schema, migrations, seed, re-exported client
 ```
 
 - Import Prisma types/client from `@genpos/db`, never `@prisma/client` directly in apps.
-- Env files: `apps/web/.env` (runtime) and `packages/db/.env` (Prisma CLI). See each `.env.example`.
+- Env files: `apps/web/.env`, `apps/api/.env` (runtime) and `packages/db/.env` (Prisma CLI). See each `.env.example`.
+- `@genpos/db` is plain JS (`export * from "@prisma/client"`) so it needs no build step for Next or Nest.
 
 ## Commands
 
 ```bash
-pnpm dev          # start dev server (localhost:3000)
-pnpm build        # production build
-pnpm lint         # ESLint
+pnpm dev          # web (localhost:3000) + api (localhost:4000) in parallel
+pnpm dev:web      # web only
+pnpm dev:api      # api only (Swagger at localhost:4000/api/docs)
+pnpm build        # build all apps
+pnpm lint         # lint all apps
 
 pnpm db:migrate   # prisma migrate dev
 pnpm db:generate  # prisma generate (after schema changes)
@@ -31,6 +34,17 @@ pnpm db:push      # prisma db push (no migration file)
 pnpm db:seed      # run packages/db/prisma/seed.ts
 pnpm db:studio    # open Prisma Studio
 ```
+
+## API (`apps/api`)
+
+NestJS 12, **native ESM** — relative imports need the `.js` suffix. Full endpoint list in `apps/api/README.md`.
+
+- REST under `/api/v1`; every route needs `Authorization: Bearer <accessToken>` unless decorated `@Public()`
+- Roles via `@Roles('ADMIN')`; current user via `@CurrentUser()` (`src/common/decorators.ts`)
+- Validation: zod schemas wrapped with `createZodDto` from `nestjs-zod`; use `isoDate` (not `z.coerce.date()`) for dates so Swagger generation works
+- Auth: short-lived JWT access token + rotating opaque refresh token stored SHA-256-hashed in `Session`
+- Module layout: `src/modules/<feature>/<feature>.{dto,service,controller,module}.ts`
+- Business logic is ported 1:1 from `apps/web/src/server/routers` — keep the two in sync until the web app is migrated to the API
 
 ## Web App Structure (`apps/web`)
 
