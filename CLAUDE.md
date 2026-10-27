@@ -2,6 +2,22 @@
 
 Next.js 16 (App Router) · React 19 · TypeScript 6 · Prisma 6 (PostgreSQL) · tRPC v11 · Tailwind CSS v4 · shadcn/ui · pnpm
 
+## Monorepo Layout
+
+pnpm workspaces. Run all commands from the repo root.
+
+```
+apps/
+  web/        # @genpos/web    — Next.js frontend (existing app; tRPC lives here for now)
+  api/        # @genpos/api    — NestJS backend (to be scaffolded)
+  mobile/     # @genpos/mobile — React Native / Expo app (to be scaffolded)
+packages/
+  db/         # @genpos/db     — Prisma schema, migrations, seed, re-exported client
+```
+
+- Import Prisma types/client from `@genpos/db`, never `@prisma/client` directly in apps.
+- Env files: `apps/web/.env` (runtime) and `packages/db/.env` (Prisma CLI). See each `.env.example`.
+
 ## Commands
 
 ```bash
@@ -12,11 +28,11 @@ pnpm lint         # ESLint
 pnpm db:migrate   # prisma migrate dev
 pnpm db:generate  # prisma generate (after schema changes)
 pnpm db:push      # prisma db push (no migration file)
-pnpm db:seed      # run prisma/seed.ts
+pnpm db:seed      # run packages/db/prisma/seed.ts
 pnpm db:studio    # open Prisma Studio
 ```
 
-## Project Structure
+## Web App Structure (`apps/web`)
 
 ```
 src/
@@ -44,7 +60,7 @@ src/
       *-view-client.tsx       # Client component — receives data as props
   lib/
     auth.ts                   # getSession, requireAuth, canAccess
-    prisma.ts                 # PrismaClient singleton
+    prisma.ts                 # PrismaClient singleton (imports from @genpos/db)
     currency-context.tsx      # useFormatCurrency hook + CurrencyProvider
     trpc/
       server.ts               # router, publicProcedure, protectedProcedure, adminProcedure
@@ -54,10 +70,9 @@ src/
     auth.ts / products.ts / orders.ts / customers.ts
     analytics.ts / shop.ts / users.ts / categories.ts
     finance.ts                # expenses, employees, budget, reports sub-routers
-prisma/
-  schema.prisma               # source of truth for DB models
-  seed.ts                     # seeding script
 ```
+
+Prisma: `packages/db/prisma/schema.prisma` (source of truth), `migrations/`, `seed.ts`.
 
 ## Auth
 

@@ -7,7 +7,7 @@ import { useFormatCurrencyExact } from "@/lib/currency-context";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { useTranslation, type TranslationKey } from "@/lib/i18n/language-context";
-import type { Prisma } from "@prisma/client";
+import type { Prisma } from "@genpos/db";
 import { FinanceNav } from "@/components/finance/finance-nav";
 
 type ExpenseItem = Prisma.ExpenseGetPayload<{

@@ -27,6 +27,22 @@ A full-featured point-of-sale and shop management system built with Next.js 16 (
 | Charts | Recharts |
 | Package manager | pnpm |
 
+## Monorepo Layout
+
+pnpm workspaces. Run all commands from the repo root.
+
+```
+apps/
+  web/        # @genpos/web    — Next.js frontend (existing app; tRPC lives here for now)
+  api/        # @genpos/api    — NestJS backend (to be scaffolded)
+  mobile/     # @genpos/mobile — React Native / Expo app (to be scaffolded)
+packages/
+  db/         # @genpos/db     — Prisma schema, migrations, seed, re-exported client
+```
+
+- Import Prisma types/client from `@genpos/db`, never `@prisma/client` directly in apps.
+- Env files: `apps/web/.env` (runtime) and `packages/db/.env` (Prisma CLI). See each `.env.example`.
+
 ## Quick Start
 
 ### Prerequisites
@@ -37,7 +53,8 @@ A full-featured point-of-sale and shop management system built with Next.js 16 (
 
 ```bash
 pnpm install
-cp .env.example .env        # fill in DATABASE_URL, SESSION_SECRET
+cp apps/web/.env.example apps/web/.env       # DATABASE_URL, SESSION_SECRET
+cp packages/db/.env.example packages/db/.env  # DATABASE_URL (Prisma CLI)
 pnpm db:push                # sync schema to database
 pnpm db:seed                # seed admin user + sample data
 pnpm dev                    # start on localhost:3000
@@ -61,7 +78,7 @@ pnpm lint         # ESLint
 pnpm db:migrate   # prisma migrate dev (creates migration file)
 pnpm db:generate  # prisma generate (after schema changes)
 pnpm db:push      # prisma db push (sync schema, no migration file)
-pnpm db:seed      # run prisma/seed.ts
+pnpm db:seed      # run packages/db/prisma/seed.ts
 pnpm db:studio    # open Prisma Studio
 ```
 
@@ -112,10 +129,9 @@ src/
     auth.ts / products.ts / orders.ts / customers.ts
     analytics.ts / shop.ts / users.ts / categories.ts
     finance.ts                # expenses, employees, budget, reports
-prisma/
-  schema.prisma               # source of truth for DB models
-  seed.ts                     # seeding script
 ```
+
+Prisma lives in `packages/db/prisma/` (schema, migrations, seed).
 
 ## Auth & Roles
 

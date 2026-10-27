@@ -3,7 +3,7 @@ import { router, protectedProcedure, adminProcedure } from "@/lib/trpc/server";
 import { prisma } from "@/lib/prisma";
 import { TRPCError } from "@trpc/server";
 import { generateOrderNumber } from "@/lib/utils";
-import type { Prisma } from "@prisma/client";
+import type { Prisma } from "@genpos/db";
 
 export const ordersRouter = router({
   list: protectedProcedure
