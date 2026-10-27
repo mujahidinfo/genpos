@@ -10,7 +10,7 @@ pnpm workspaces. Run all commands from the repo root.
 apps/
   web/        # @genpos/web    — Next.js frontend (existing app; tRPC lives here for now)
   api/        # @genpos/api    — NestJS 12 REST API + JWT auth (localhost:4000, see apps/api/README.md)
-  mobile/     # @genpos/mobile — React Native / Expo app (to be scaffolded)
+  mobile/     # @genpos/mobile — Expo SDK 58 app (Expo Router, NativeTabs), see apps/mobile/README.md
 packages/
   db/         # @genpos/db     — Prisma schema, migrations, seed, re-exported client
 ```
@@ -25,6 +25,7 @@ packages/
 pnpm dev          # web (localhost:3000) + api (localhost:4000) in parallel
 pnpm dev:web      # web only
 pnpm dev:api      # api only (Swagger at localhost:4000/api/docs)
+pnpm dev:mobile   # Expo / Metro (needs the api running)
 pnpm build        # build all apps
 pnpm lint         # lint all apps
 
@@ -45,6 +46,17 @@ NestJS 12, **native ESM** — relative imports need the `.js` suffix. Full endpo
 - Auth: short-lived JWT access token + rotating opaque refresh token stored SHA-256-hashed in `Session`
 - Module layout: `src/modules/<feature>/<feature>.{dto,service,controller,module}.ts`
 - Business logic is ported 1:1 from `apps/web/src/server/routers` — keep the two in sync until the web app is migrated to the API
+
+## Mobile (`apps/mobile`)
+
+Expo SDK 58 / React Native 0.88. Read `apps/mobile/AGENTS.md` first — Expo APIs change every SDK, verify against versioned docs.
+
+- Add native deps with `npx expo install <pkg>` (run inside apps/mobile), never plain `pnpm add`
+- `src/app` is routes only; signed-in area is `(app)/` with NativeTabs and one Stack per tab; auth gate via `Stack.Protected` in `src/app/_layout.tsx`
+- API calls go through `api()` in `src/lib/api-client.ts` (handles token refresh); query hooks live in `src/api/queries.ts`
+- Response types are hand-written in `src/api/types.ts` (dates are ISO strings) — keep in sync with apps/api
+- Money: `useFormatCurrency()` from `src/lib/format.ts` (same locale rule as the web app)
+- Checks: `npx tsc --noEmit`, `npx expo lint`, `npx expo-doctor`
 
 ## Web App Structure (`apps/web`)
 

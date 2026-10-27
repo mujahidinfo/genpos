@@ -35,7 +35,7 @@ pnpm workspaces. Run all commands from the repo root.
 apps/
   web/        # @genpos/web    — Next.js frontend (existing app; tRPC lives here for now)
   api/        # @genpos/api    — NestJS 12 REST API + JWT auth (localhost:4000, see apps/api/README.md)
-  mobile/     # @genpos/mobile — React Native / Expo app (to be scaffolded)
+  mobile/     # @genpos/mobile — Expo SDK 58 app (Expo Router, NativeTabs), see apps/mobile/README.md
 packages/
   db/         # @genpos/db     — Prisma schema, migrations, seed, re-exported client
 ```
@@ -75,6 +75,7 @@ pnpm dev                    # start on localhost:3000
 pnpm dev          # web (localhost:3000) + api (localhost:4000) in parallel
 pnpm dev:web      # web only
 pnpm dev:api      # api only (Swagger at localhost:4000/api/docs)
+pnpm dev:mobile   # Expo / Metro (needs the api running)
 pnpm build        # build all apps
 pnpm lint         # lint all apps
 

@@ -7,6 +7,7 @@
     "dev": "pnpm --parallel --filter @genpos/web --filter @genpos/api dev",
     "dev:web": "pnpm --filter @genpos/web dev",
     "dev:api": "pnpm --filter @genpos/api dev",
+    "dev:mobile": "pnpm --filter @genpos/mobile dev",
     "build": "pnpm -r build",
     "build:web": "pnpm --filter @genpos/web build",
     "build:api": "pnpm --filter @genpos/api build",
