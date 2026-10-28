@@ -60,6 +60,9 @@ export default function AccountScreen() {
             <ListRow href="/account/suppliers" title="Suppliers" subtitle="Who you buy from and what you owe" />
           )}
           {canManage(active.role) && (
+            <ListRow href="/account/expenses" title="Expenses" subtitle="Rent, bills and other spending" />
+          )}
+          {canManage(active.role) && (
             <ListRow href="/account/staff" title="Staff" subtitle="Accounts, roles and branches" />
           )}
         </Card>

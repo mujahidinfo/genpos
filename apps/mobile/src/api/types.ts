@@ -236,3 +236,26 @@ export type Purchase = {
   items: { id: string; name: string; quantity: number; unitCost: number; total: number }[];
   payments: SupplierPayment[];
 };
+
+// ─── Expenses ────────────────────────────────────────────────────────────────
+
+export type ExpenseStatus = 'PAID' | 'PENDING' | 'CANCELLED';
+
+export type ExpenseCategory = {
+  id: string;
+  name: string;
+  color: string;
+  _count?: { expenses: number };
+};
+
+export type Expense = {
+  id: string;
+  title: string;
+  amount: number;
+  date: string;
+  categoryId: string;
+  paymentMethod: PaymentMethod;
+  status: ExpenseStatus;
+  notes: string | null;
+  category: ExpenseCategory;
+};

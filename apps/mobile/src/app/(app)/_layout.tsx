@@ -46,6 +46,10 @@ export default function AppLayout() {
           name="supplier-payment"
           options={{ presentation: modalPresentation, title: 'Pay supplier' }}
         />
+        <Stack.Screen
+          name="expense-form"
+          options={{ presentation: modalPresentation, title: 'Expense' }}
+        />
       </Stack>
     </CartProvider>
   );

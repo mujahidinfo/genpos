@@ -8,6 +8,7 @@ export default function AccountLayout() {
       <Stack.Screen name="index" options={{ title: 'More' }} />
       <Stack.Screen name="staff" options={{ title: 'Staff' }} />
       <Stack.Screen name="suppliers" options={{ title: 'Suppliers' }} />
+      <Stack.Screen name="expenses" options={{ title: 'Expenses' }} />
       <Stack.Screen name="supplier/[id]" options={{ title: '', headerLargeTitle: false }} />
     </Stack>
   );

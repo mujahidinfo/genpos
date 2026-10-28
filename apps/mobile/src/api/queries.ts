@@ -3,6 +3,8 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tansta
 import type {
   AnalyticsOverview,
   Customer,
+  Expense,
+  ExpenseCategory,
   Order,
   OrderStatus,
   Paginated,
@@ -276,5 +278,72 @@ export function useCreatePurchase() {
           queryClient.invalidateQueries({ queryKey }),
         ),
       ),
+  });
+}
+
+// ─── Expenses (owner/manager) ────────────────────────────────────────────────
+
+export function useExpenses() {
+  return useInfiniteQuery({
+    queryKey: ['expenses', 'list'],
+    queryFn: ({ pageParam }) =>
+      api<Paginated<Expense>>('/finance/expenses', { query: { page: pageParam, pageSize: PAGE_SIZE } }),
+    initialPageParam: 1,
+    getNextPageParam: nextPage,
+  });
+}
+
+export function useExpenseTotal(days: number) {
+  return useQuery({
+    queryKey: ['expenses', 'total', days],
+    queryFn: () =>
+      api<{ totalExpenses: number; totalIncome: number; netProfit: number }>('/finance/overview', {
+        query: { days },
+      }),
+  });
+}
+
+export function useExpenseCategories() {
+  return useQuery({
+    queryKey: ['expenses', 'categories'],
+    queryFn: () => api<ExpenseCategory[]>('/finance/expense-categories'),
+    staleTime: 5 * 60_000,
+  });
+}
+
+export function useCreateExpenseCategory() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { name: string; color: string }) =>
+      api<ExpenseCategory>('/finance/expense-categories', { method: 'POST', body: input }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['expenses', 'categories'] }),
+  });
+}
+
+export type ExpenseInput = {
+  title: string;
+  amount: number;
+  date: string;
+  categoryId: string;
+  paymentMethod: PaymentMethod;
+  notes?: string;
+};
+
+export function useSaveExpense() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...input }: ExpenseInput & { id?: string }) =>
+      id
+        ? api<Expense>(`/finance/expenses/${id}`, { method: 'PATCH', body: input })
+        : api<Expense>('/finance/expenses', { method: 'POST', body: input }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['expenses'] }),
+  });
+}
+
+export function useDeleteExpense() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api(`/finance/expenses/${id}`, { method: 'DELETE' }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['expenses'] }),
   });
 }
