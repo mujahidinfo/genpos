@@ -2,6 +2,7 @@ import * as Haptics from 'expo-haptics';
 import { router, Stack } from 'expo-router';
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, Share, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useCreateOrder, useCustomerLookup, useFindOrCreateCustomer, useShop } from '@/api/queries';
 import type { Order, PaymentMethod } from '@/api/types';
@@ -36,6 +37,7 @@ function quickCash(total: number) {
 
 export default function CheckoutScreen() {
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const cart = useCart();
   const formatCurrency = useFormatCurrency();
   const { data: shop } = useShop();
@@ -135,7 +137,15 @@ export default function CheckoutScreen() {
       });
 
     return (
-      <View style={[styles.flex, styles.done, { backgroundColor: theme.background }]}>
+      <View
+        style={[
+          styles.flex,
+          styles.done,
+          {
+            backgroundColor: theme.background,
+            paddingBottom: Spacing.four + Math.max(insets.bottom, Platform.OS === 'android' ? 16 : 0),
+          },
+        ]}>
         <Stack.Screen options={{ title: 'Paid', headerBackVisible: false, gestureEnabled: false }} />
         <View style={[styles.check, { backgroundColor: theme.success }]}>
           <ThemedText style={styles.checkMark}>✓</ThemedText>
@@ -166,7 +176,7 @@ export default function CheckoutScreen() {
     <KeyboardAvoidingView
       style={[styles.flex, { backgroundColor: theme.background }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: Spacing.four }]} keyboardShouldPersistTaps="handled">
         <View style={styles.hero}>
           <ThemedText type="small" themeColor="textSecondary">
             {cart.itemCount} item{cart.itemCount === 1 ? '' : 's'} · Total
@@ -276,7 +286,15 @@ export default function CheckoutScreen() {
         )}
       </ScrollView>
 
-      <View style={[styles.footer, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
+      <View
+        style={[
+          styles.footer,
+          {
+            backgroundColor: theme.backgroundElement,
+            borderColor: theme.border,
+            paddingBottom: Spacing.three + Math.max(insets.bottom, Platform.OS === 'android' ? 16 : 0),
+          },
+        ]}>
         <Button
           title={`Charge ${formatCurrency(total)}`}
           onPress={charge}

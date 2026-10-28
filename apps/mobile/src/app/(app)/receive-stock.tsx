@@ -2,6 +2,7 @@ import * as Haptics from 'expo-haptics';
 import { router, useIsFocused, useLocalSearchParams } from 'expo-router';
 import { useRef, useState, type ComponentProps } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { findByBarcode, useCreatePurchase, useProducts, useSuppliers } from '@/api/queries';
 import type { Product } from '@/api/types';
@@ -35,6 +36,7 @@ const toNumber = (text: string) => Number(text.replace(/,/g, ''));
  */
 export default function ReceiveStockScreen() {
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const isFocused = useIsFocused();
   const formatCurrency = useFormatCurrency();
   const params = useLocalSearchParams<{ supplierId?: string }>();
@@ -289,7 +291,15 @@ export default function ReceiveStockScreen() {
         )}
       </ScrollView>
 
-      <View style={[styles.footer, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
+      <View
+        style={[
+          styles.footer,
+          {
+            backgroundColor: theme.backgroundElement,
+            borderColor: theme.border,
+            paddingBottom: Spacing.three + Math.max(insets.bottom, Platform.OS === 'android' ? 16 : 0),
+          },
+        ]}>
         <Button
           title={lines.length ? `Receive ${formatCurrency(total)}` : 'Scan or search items to receive'}
           onPress={save}

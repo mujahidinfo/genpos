@@ -1,4 +1,5 @@
 import { Stack } from 'expo-router';
+import { Platform } from 'react-native';
 
 import { CartProvider } from '@/lib/cart';
 
@@ -7,24 +8,44 @@ import { CartProvider } from '@/lib/cart';
  * here so the scanner, product search, quick-add and checkout all share it.
  */
 export default function AppLayout() {
+  const modalPresentation = Platform.OS === 'ios' ? 'modal' : 'card';
+
   return (
     <CartProvider>
       <Stack screenOptions={{ headerBackButtonDisplayMode: 'minimal' }}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen
           name="add-item"
-          options={{ presentation: 'modal', title: 'Add item' }}
+          options={{ presentation: modalPresentation, title: 'Add item' }}
         />
         <Stack.Screen
           name="new-product"
-          options={{ presentation: 'modal', title: 'New product' }}
+          options={{ presentation: modalPresentation, title: 'New product' }}
         />
-        <Stack.Screen name="checkout" options={{ presentation: 'modal', title: 'Checkout' }} />
-        <Stack.Screen name="branches" options={{ presentation: 'modal', title: 'Branches' }} />
-        <Stack.Screen name="receive-stock" options={{ presentation: 'modal', title: 'Receive stock' }} />
-        <Stack.Screen name="member-form" options={{ presentation: 'modal', title: 'Staff member' }} />
-        <Stack.Screen name="supplier-form" options={{ presentation: 'modal', title: 'Supplier' }} />
-        <Stack.Screen name="supplier-payment" options={{ presentation: 'modal', title: 'Pay supplier' }} />
+        <Stack.Screen
+          name="checkout"
+          options={{ presentation: modalPresentation, title: 'Checkout' }}
+        />
+        <Stack.Screen
+          name="branches"
+          options={{ presentation: modalPresentation, title: 'Branches' }}
+        />
+        <Stack.Screen
+          name="receive-stock"
+          options={{ presentation: modalPresentation, title: 'Receive stock' }}
+        />
+        <Stack.Screen
+          name="member-form"
+          options={{ presentation: modalPresentation, title: 'Staff member' }}
+        />
+        <Stack.Screen
+          name="supplier-form"
+          options={{ presentation: modalPresentation, title: 'Supplier' }}
+        />
+        <Stack.Screen
+          name="supplier-payment"
+          options={{ presentation: modalPresentation, title: 'Pay supplier' }}
+        />
       </Stack>
     </CartProvider>
   );
