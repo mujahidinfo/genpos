@@ -1,27 +1,29 @@
 import { z } from "zod";
+import type { Category } from "@genpos/db";
 import { router, protectedProcedure, adminProcedure } from "@/lib/trpc/server";
-import { prisma } from "@/lib/prisma";
+import type { CategoryWithCount } from "@/server/api-types";
 
 export const categoriesRouter = router({
-  list: protectedProcedure.query(async () => {
-    return prisma.category.findMany({
-      include: { _count: { select: { products: true } } },
-      orderBy: { name: "asc" },
-    });
-  }),
+  list: protectedProcedure.query(({ ctx }) => ctx.api<CategoryWithCount[]>("/categories")),
 
   create: adminProcedure
     .input(z.object({ name: z.string().min(1), description: z.string().optional(), color: z.string().optional() }))
-    .mutation(async ({ input }) => prisma.category.create({ data: input })),
+    .mutation(({ input, ctx }) => ctx.api<Category>("/categories", { method: "POST", body: input })),
 
   update: adminProcedure
-    .input(z.object({ id: z.string(), name: z.string().min(1).optional(), description: z.string().optional(), color: z.string().optional() }))
-    .mutation(async ({ input }) => {
-      const { id, ...data } = input;
-      return prisma.category.update({ where: { id }, data });
-    }),
+    .input(
+      z.object({
+        id: z.string(),
+        name: z.string().min(1).optional(),
+        description: z.string().optional(),
+        color: z.string().optional(),
+      }),
+    )
+    .mutation(({ input: { id, ...data }, ctx }) =>
+      ctx.api<Category>(`/categories/${id}`, { method: "PATCH", body: data }),
+    ),
 
   delete: adminProcedure
     .input(z.object({ id: z.string() }))
-    .mutation(async ({ input }) => prisma.category.delete({ where: { id: input.id } })),
+    .mutation(({ input, ctx }) => ctx.api<Category>(`/categories/${input.id}`, { method: "DELETE" })),
 });

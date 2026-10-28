@@ -48,7 +48,7 @@ export function RateSheetHero() {
 
           <div className="mt-9 flex flex-wrap items-center gap-x-7 gap-y-4">
             <Link
-              href="/login"
+              href="/signup"
               className="group inline-flex items-center gap-3 border-2 border-[var(--ink)] bg-[var(--ink)] px-7 py-3.5 font-[family-name:var(--font-bengali)] text-[1.05rem] text-[var(--paper)] transition-colors hover:bg-[var(--vermilion)] hover:border-[var(--vermilion)]"
             >
               {t("landing.rsCta")}

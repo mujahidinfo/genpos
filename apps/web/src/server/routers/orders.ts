@@ -1,24 +1,16 @@
 import { z } from "zod";
-import { router, protectedProcedure, adminProcedure } from "@/lib/trpc/server";
-import { prisma } from "@/lib/prisma";
-import { TRPCError } from "@trpc/server";
-import { generateOrderNumber } from "@/lib/utils";
-import type { Prisma } from "@genpos/db";
+import type { Refund } from "@genpos/db";
+import { router, protectedProcedure } from "@/lib/trpc/server";
+import type { OrderDetail, OrderListItem, Paginated } from "@/server/api-types";
+
+const statusSchema = z.enum(["PENDING", "PROCESSING", "FULFILLED", "CANCELED", "REFUNDED"]);
 
 export const ordersRouter = router({
   list: protectedProcedure
     .input(
       z
         .object({
-          status: z
-            .enum([
-              "PENDING",
-              "PROCESSING",
-              "FULFILLED",
-              "CANCELED",
-              "REFUNDED",
-            ])
-            .optional(),
+          status: statusSchema.optional(),
           search: z.string().optional(),
           from: z.date().optional(),
           to: z.date().optional(),
@@ -27,55 +19,11 @@ export const ordersRouter = router({
         })
         .optional(),
     )
-    .query(async ({ input }) => {
-      const { status, search, from, to, page = 1, pageSize = 20 } = input ?? {};
-      const skip = (page - 1) * pageSize;
-      const where: Prisma.OrderWhereInput = {};
-      if (status) where.status = status;
-      if (search) {
-        where.OR = [
-          { orderNumber: { contains: search, mode: "insensitive" } },
-          { customer: { name: { contains: search, mode: "insensitive" } } },
-        ];
-      }
-      if (from || to) {
-        where.createdAt = {};
-        if (from) (where.createdAt as Prisma.DateTimeFilter).gte = from;
-        if (to) (where.createdAt as Prisma.DateTimeFilter).lte = to;
-      }
-      const [items, total] = await Promise.all([
-        prisma.order.findMany({
-          where,
-          include: {
-            customer: true,
-            cashier: { select: { id: true, name: true } },
-            items: { include: { product: true } },
-            refunds: true,
-          },
-          skip,
-          take: pageSize,
-          orderBy: { createdAt: "desc" },
-        }),
-        prisma.order.count({ where }),
-      ]);
-      return { items, total, page, pageSize };
-    }),
+    .query(({ input, ctx }) => ctx.api<Paginated<OrderListItem>>("/orders", { query: input })),
 
   getById: protectedProcedure
     .input(z.object({ id: z.string() }))
-    .query(async ({ input }) => {
-      const order = await prisma.order.findUnique({
-        where: { id: input.id },
-        include: {
-          customer: true,
-          cashier: { select: { id: true, name: true } },
-          items: { include: { product: true, variant: true } },
-          refunds: true,
-        },
-      });
-      if (!order) throw new TRPCError({ code: "NOT_FOUND" });
-      return order;
-    }),
+    .query(({ input, ctx }) => ctx.api<OrderDetail>(`/orders/${input.id}`)),
 
   create: protectedProcedure
     .input(
@@ -89,9 +37,7 @@ export const ordersRouter = router({
               variantId: z.string().optional(),
               name: z.string(),
               sku: z.string().optional(),
-              // Sale price is set per line by the cashier (SMEs negotiate prices),
-              // so it is deliberately not checked against the catalogue price —
-              // but it must still be a sane, non-negative amount.
+              // Sale price is set per line by the cashier (SMEs negotiate prices).
               price: z.number().nonnegative().finite(),
               quantity: z.number().int().positive(),
             }),
@@ -100,147 +46,23 @@ export const ordersRouter = router({
         discountType: z.enum(["percentage", "fixed"]).optional(),
         discountValue: z.number().min(0).default(0),
         taxRate: z.number().min(0).default(0),
-        paymentMethod: z
-          .enum(["CASH", "CARD", "MOBILE_MONEY", "BANK_TRANSFER"])
-          .default("CASH"),
+        paymentMethod: z.enum(["CASH", "CARD", "MOBILE_MONEY", "BANK_TRANSFER"]).default("CASH"),
+        amountTendered: z.number().nonnegative().optional(),
         note: z.string().optional(),
-        // A POS sale is complete the moment it is rung up, so it defaults to
-        // FULFILLED. Callers that genuinely need a queue (e.g. online orders
-        // awaiting delivery) can still pass PENDING.
-        status: z
-          .enum(["PENDING", "PROCESSING", "FULFILLED"])
-          .default("FULFILLED"),
+        status: z.enum(["PENDING", "PROCESSING", "FULFILLED"]).default("FULFILLED"),
       }),
     )
-    .mutation(async ({ input, ctx }) => {
-      const subtotal = input.items.reduce(
-        (s, i) => s + i.price * i.quantity,
-        0,
-      );
-      let discountAmt = 0;
-      if (input.discountType === "percentage")
-        discountAmt = subtotal * (Math.min(input.discountValue, 100) / 100);
-      else if (input.discountType === "fixed")
-        discountAmt = input.discountValue;
-      // Never let a discount exceed the subtotal — that would book a negative order.
-      discountAmt = parseFloat(Math.min(discountAmt, subtotal).toFixed(2));
-      const taxableAmount = subtotal - discountAmt;
-      const taxAmt = parseFloat(
-        (taxableAmount * (input.taxRate / 100)).toFixed(2),
-      );
-      const total = parseFloat((taxableAmount + taxAmt).toFixed(2));
-
-      // Deduct stock
-      for (const item of input.items) {
-        if (item.variantId) {
-          const variant = await prisma.productVariant.findUnique({
-            where: { id: item.variantId },
-          });
-          if (!variant || variant.stock < item.quantity) {
-            throw new TRPCError({
-              code: "BAD_REQUEST",
-              message: `Insufficient stock for ${item.name}`,
-            });
-          }
-          await prisma.productVariant.update({
-            where: { id: item.variantId },
-            data: { stock: { decrement: item.quantity } },
-          });
-          await prisma.stockMovement.create({
-            data: {
-              productId: item.productId,
-              variantId: item.variantId,
-              type: "OUT",
-              quantity: item.quantity,
-              note: "Sale",
-            },
-          });
-        }
-      }
-
-      return prisma.order.create({
-        data: {
-          orderNumber: generateOrderNumber(),
-          cashierId: ctx.user.id,
-          customerId: input.customerId,
-          type: input.type,
-          status: input.status,
-          subtotal,
-          discountType: input.discountType,
-          discountValue: input.discountValue,
-          discountAmt,
-          taxRate: input.taxRate,
-          taxAmt,
-          total,
-          paymentMethod: input.paymentMethod,
-          note: input.note,
-          items: {
-            create: input.items.map((i) => ({
-              productId: i.productId,
-              variantId: i.variantId,
-              name: i.name,
-              sku: i.sku,
-              price: i.price,
-              quantity: i.quantity,
-              total: i.price * i.quantity,
-            })),
-          },
-        },
-        include: {
-          customer: true,
-          items: { include: { product: true } },
-        },
-      });
-    }),
+    .mutation(({ input, ctx }) => ctx.api<OrderDetail>("/orders", { method: "POST", body: input })),
 
   updateStatus: protectedProcedure
-    .input(
-      z.object({
-        id: z.string(),
-        status: z.enum([
-          "PENDING",
-          "PROCESSING",
-          "FULFILLED",
-          "CANCELED",
-          "REFUNDED",
-        ]),
-      }),
-    )
-    .mutation(async ({ input }) => {
-      return prisma.order.update({
-        where: { id: input.id },
-        data: { status: input.status },
-      });
-    }),
+    .input(z.object({ id: z.string(), status: statusSchema }))
+    .mutation(({ input: { id, status }, ctx }) =>
+      ctx.api<OrderListItem>(`/orders/${id}/status`, { method: "PATCH", body: { status } }),
+    ),
 
   refund: protectedProcedure
-    .input(
-      z.object({
-        orderId: z.string(),
-        amount: z.number().positive(),
-        reason: z.string().optional(),
-      }),
-    )
-    .mutation(async ({ input }) => {
-      const order = await prisma.order.findUniqueOrThrow({
-        where: { id: input.orderId },
-      });
-      const existingRefunds = await prisma.refund.aggregate({
-        where: { orderId: input.orderId },
-        _sum: { amount: true },
-      });
-      const totalRefunded = existingRefunds._sum.amount ?? 0;
-      if (totalRefunded + input.amount > order.total) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "Refund exceeds order total",
-        });
-      }
-      const refund = await prisma.refund.create({ data: input });
-      await prisma.order.update({
-        where: { id: input.orderId },
-        data: { status: "REFUNDED" },
-      });
-      return refund;
-    }),
+    .input(z.object({ orderId: z.string(), amount: z.number().positive(), reason: z.string().optional() }))
+    .mutation(({ input: { orderId, ...body }, ctx }) =>
+      ctx.api<Refund>(`/orders/${orderId}/refunds`, { method: "POST", body }),
+    ),
 });

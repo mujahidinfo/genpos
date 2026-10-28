@@ -97,6 +97,15 @@ const en = {
     switchToFullWidth: "Switch to full width",
     switchToCentered: "Switch to centered",
     signOut: "Sign out",
+    branch: "Branch",
+    switchBranch: "Switch branch",
+    addBranch: "Add a branch",
+    newBranch: "New branch",
+    branchName: "Branch name",
+    branchNamePlaceholder: "e.g. Mirpur outlet",
+    branchHint: "Shares your products and customers. Stock and sales are tracked separately.",
+    createBranch: "Add branch",
+    cancel: "Cancel",
   },
 
   // ─── Roles ────────────────────────────────────────────────────────────────────
@@ -1005,6 +1014,15 @@ const bn: Widen<typeof en> = {
     switchToFullWidth: "সম্পূর্ণ প্রস্থে স্যুইচ করুন",
     switchToCentered: "কেন্দ্রীভূত করুন",
     signOut: "সাইন আউট",
+    branch: "শাখা",
+    switchBranch: "শাখা পরিবর্তন করুন",
+    addBranch: "নতুন শাখা যোগ করুন",
+    newBranch: "নতুন শাখা",
+    branchName: "শাখার নাম",
+    branchNamePlaceholder: "যেমন: মিরপুর আউটলেট",
+    branchHint: "পণ্য ও গ্রাহক একই থাকবে। স্টক ও বিক্রি আলাদাভাবে হিসাব হবে।",
+    createBranch: "শাখা যোগ করুন",
+    cancel: "বাতিল",
   },
 
   roles: {

@@ -476,7 +476,8 @@ function ProductFormPanel({ productId, categories, onClose }: {
     if (isEdit && productId) {
       updateProduct.mutate({ id: productId, ...payload });
     } else {
-      createProduct.mutate({ ...payload, variants: [{ name: "Default", stock: 0, lowStock: 5 }] });
+      // No variants → the API creates the hidden default variant that holds stock.
+      createProduct.mutate({ ...payload, stock: 0, lowStock: 5 });
     }
   };
 

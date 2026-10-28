@@ -54,7 +54,7 @@ packages/
 
 ```bash
 pnpm install
-cp apps/web/.env.example apps/web/.env       # DATABASE_URL, SESSION_SECRET
+cp apps/web/.env.example apps/web/.env       # API_URL
 cp packages/db/.env.example packages/db/.env  # DATABASE_URL (Prisma CLI)
 pnpm db:push                # sync schema to database
 pnpm db:seed                # seed admin user + sample data
@@ -89,10 +89,14 @@ pnpm db:studio    # open Prisma Studio
 ## Environment Variables
 
 ```env
-DATABASE_URL="postgresql://postgres:<password>@localhost:5432/genpos"
-SESSION_SECRET="<min 32 chars>"
+# apps/web/.env — the web app only talks to the API
+API_URL="http://localhost:4000/api/v1"
 NEXT_PUBLIC_APP_NAME="GenPOS"
 NEXT_PUBLIC_APP_URL="http://localhost:3000"
+
+# apps/api/.env and packages/db/.env
+DATABASE_URL="postgresql://postgres:<password>@localhost:5432/genpos"
+JWT_SECRET="<min 32 chars>"
 ```
 
 ## Project Structure

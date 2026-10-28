@@ -1,72 +1,102 @@
-import { z } from "zod";
-import bcrypt from "bcryptjs";
-import { cookies } from "next/headers";
-import { router, publicProcedure, protectedProcedure } from "@/lib/trpc/server";
-import { prisma } from "@/lib/prisma";
 import { TRPCError } from "@trpc/server";
-import crypto from "crypto";
+import { z } from "zod";
+import { router, publicProcedure, protectedProcedure, toTRPCError } from "@/lib/trpc/server";
+import {
+  AUTH_COOKIES,
+  apiFetch,
+  clearAuthCookies,
+  setAuthCookies,
+  setShopCookie,
+  type AuthResponse,
+} from "@/server/api";
+import type { Workspace } from "@/server/api-types";
+
+/** Store the new session and pick a branch. Returns whether onboarding is needed. */
+async function startSession(
+  ctx: { cookies: Parameters<typeof setAuthCookies>[0] },
+  auth: AuthResponse,
+) {
+  setAuthCookies(ctx.cookies, auth);
+  const workspaces = await apiFetch<Workspace[]>("/businesses", { token: auth.accessToken });
+  const firstShop = workspaces[0]?.shops[0];
+  if (firstShop) setShopCookie(ctx.cookies, firstShop.id);
+  return { user: auth.user, needsOnboarding: !firstShop };
+}
 
 export const authRouter = router({
   login: publicProcedure
-    .input(
-      z.object({
-        email: z.string().email(),
-        password: z.string().min(6),
-      }),
-    )
-    .mutation(async ({ input }) => {
-      const user = await prisma.user.findUnique({
-        where: { email: input.email },
-      });
-      if (!user || !user.isActive) {
-        throw new TRPCError({
-          code: "UNAUTHORIZED",
-          message: "Invalid credentials",
-        });
+    .input(z.object({ email: z.string().email(), password: z.string().min(1) }))
+    .mutation(async ({ input, ctx }) => {
+      try {
+        const auth = await apiFetch<AuthResponse>("/auth/login", { method: "POST", body: input });
+        return await startSession(ctx, auth);
+      } catch (error) {
+        throw toTRPCError(error);
       }
-      const valid = await bcrypt.compare(input.password, user.passwordHash);
-      if (!valid) {
-        throw new TRPCError({
-          code: "UNAUTHORIZED",
-          message: "Invalid credentials",
-        });
-      }
-
-      const token = crypto.randomBytes(32).toString("hex");
-      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
-
-      await prisma.session.create({
-        data: { userId: user.id, token, expiresAt },
-      });
-
-      const cookieStore = await cookies();
-      cookieStore.set("session_token", token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        expires: expiresAt,
-        path: "/",
-      });
-
-      return {
-        user: {
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          role: user.role,
-        },
-      };
     }),
 
-  logout: protectedProcedure.mutation(async ({ ctx }) => {
-    const cookieStore = await cookies();
-    const token = cookieStore.get("session_token")?.value;
-    if (token) {
-      await prisma.session.deleteMany({ where: { token } });
-      cookieStore.delete("session_token");
+  register: publicProcedure
+    .input(
+      z.object({
+        name: z.string().trim().min(1),
+        email: z.string().email(),
+        password: z.string().min(8, "Use at least 8 characters"),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      try {
+        const auth = await apiFetch<AuthResponse>("/auth/register", { method: "POST", body: input });
+        return await startSession(ctx, auth);
+      } catch (error) {
+        throw toTRPCError(error);
+      }
+    }),
+
+  logout: publicProcedure.mutation(async ({ ctx }) => {
+    const refreshToken = ctx.cookies.get(AUTH_COOKIES.refresh)?.value;
+    if (refreshToken) {
+      // Best effort: revoke server-side, sign out locally regardless.
+      await apiFetch("/auth/logout", { method: "POST", body: { refreshToken } }).catch(() => {});
     }
+    clearAuthCookies(ctx.cookies);
     return { success: true };
   }),
 
-  me: protectedProcedure.query(({ ctx }) => ctx.user),
+  me: protectedProcedure.query(({ ctx }) =>
+    ctx.api<{ id: string; name: string; email: string }>("/auth/me"),
+  ),
+
+  /** Onboarding: create the business and its first branch, then work in it. */
+  createBusiness: protectedProcedure
+    .input(
+      z.object({
+        name: z.string().trim().min(1),
+        phone: z.string().trim().optional(),
+        currency: z.string().length(3).default("BDT"),
+        language: z.enum(["en", "bn"]).default("bn"),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const business = await ctx.api<Workspace>("/businesses", { method: "POST", body: input });
+      setShopCookie(ctx.cookies, business.shops[0].id);
+      return business;
+    }),
+
+  /** Switch the active branch (validated against the user's memberships). */
+  switchShop: protectedProcedure
+    .input(z.object({ shopId: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      const workspaces = await ctx.api<Workspace[]>("/businesses");
+      const allowed = workspaces.some((w) => w.shops.some((s) => s.id === input.shopId));
+      if (!allowed) throw new TRPCError({ code: "FORBIDDEN", message: "No access to this shop" });
+      setShopCookie(ctx.cookies, input.shopId);
+      return { success: true };
+    }),
+
+  /** Open another branch of the active business (owners only, enforced by the API). */
+  addBranch: protectedProcedure
+    .input(z.object({ name: z.string().trim().min(1), phone: z.string().trim().optional() }))
+    .mutation(({ input, ctx }) =>
+      ctx.api<{ id: string; name: string }>("/shops", { method: "POST", body: input }),
+    ),
 });

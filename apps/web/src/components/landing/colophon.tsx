@@ -18,7 +18,7 @@ export function ClosingBlock() {
             {t("landing.rsCloseSub")}
           </p>
           <Link
-            href="/login"
+            href="/signup"
             className="group mt-8 inline-flex items-center gap-3 border-2 border-[var(--ink)] bg-[var(--ink)] px-8 py-4 font-[family-name:var(--font-bengali)] text-[1.05rem] text-[var(--paper)] transition-colors hover:border-[var(--vermilion)] hover:bg-[var(--vermilion)]"
           >
             {t("landing.rsCta")}

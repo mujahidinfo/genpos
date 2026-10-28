@@ -7,6 +7,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { LogOut, ChevronDown, Maximize2, Minimize2 } from "lucide-react";
 import type { AuthUser } from "@/lib/auth";
+import { BranchSwitcher } from "./branch-switcher";
 import { useLayout } from "./layout-provider";
 import { useTranslation } from "@/lib/i18n/language-context";
 
@@ -29,6 +30,8 @@ export function Header({ user }: HeaderProps) {
 
   return (
     <header className="h-14 box-content pt-[env(safe-area-inset-top)] border-b border-slate-100 bg-white flex items-center justify-end px-4 md:px-6 gap-2 shrink-0">
+
+      <BranchSwitcher user={user} />
 
       {/* Layout width toggle */}
       <button

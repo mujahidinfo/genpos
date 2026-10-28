@@ -17,8 +17,8 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
 
   const login = trpc.auth.login.useMutation({
-    onSuccess: () => {
-      router.push("/dashboard");
+    onSuccess: ({ needsOnboarding }) => {
+      router.push(needsOnboarding ? "/onboarding" : "/dashboard");
       router.refresh();
     },
     onError: (err) => {
@@ -64,6 +64,12 @@ export default function LoginPage() {
             </form>
           </CardContent>
         </Card>
+        <p className="text-center text-sm text-muted-foreground">
+          New to GenPOS?{" "}
+          <Link href="/signup" className="font-medium text-primary hover:underline">
+            Create a free account
+          </Link>
+        </p>
         <p className="text-center text-xs text-muted-foreground">
           Demo: <span className="font-medium">admin@demo.com</span> / admin123
         </p>

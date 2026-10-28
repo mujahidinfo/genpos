@@ -4,11 +4,11 @@
   "private": true,
   "packageManager": "pnpm@11.7.0",
   "scripts": {
-    "dev": "pnpm --filter @genpos/api dev",
+    "dev": "pnpm --parallel --filter @genpos/web --filter @genpos/api dev",
     "dev:web": "pnpm --filter @genpos/web dev",
     "dev:api": "pnpm --filter @genpos/api dev",
     "dev:mobile": "pnpm --filter @genpos/mobile dev",
-    "build": "pnpm --filter @genpos/api build",
+    "build": "pnpm --filter @genpos/api --filter @genpos/web build",
     "build:web": "pnpm --filter @genpos/web build",
     "build:api": "pnpm --filter @genpos/api build",
     "lint": "pnpm --filter @genpos/api --filter @genpos/mobile lint",
@@ -17,6 +17,7 @@
     "db:migrate": "pnpm --filter @genpos/db db:migrate",
     "db:deploy": "pnpm --filter @genpos/db db:deploy",
     "db:seed": "pnpm --filter @genpos/db db:seed",
-    "db:studio": "pnpm --filter @genpos/db db:studio"
+    "db:studio": "pnpm --filter @genpos/db db:studio",
+    "typecheck": "pnpm --filter @genpos/web typecheck"
   }
 }

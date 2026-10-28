@@ -8,7 +8,7 @@ pnpm workspaces. Run all commands from the repo root.
 
 ```
 apps/
-  web/        # @genpos/web    — Next.js frontend — PAUSED: still on the pre-tenancy schema, to be moved onto the API
+  web/        # @genpos/web    — Next.js dashboard; tRPC is a thin backend-for-frontend over the API
   api/        # @genpos/api    — NestJS 12 multi-tenant REST API + JWT/Google auth (localhost:4000, see apps/api/README.md)
   mobile/     # @genpos/mobile — Expo SDK 58 POS app (barcode scanning, sign-up/onboarding), see apps/mobile/README.md
 packages/
@@ -16,18 +16,20 @@ packages/
 ```
 
 - Import Prisma types/client from `@genpos/db`, never `@prisma/client` directly in apps.
-- Env files: `apps/web/.env`, `apps/api/.env` (runtime) and `packages/db/.env` (Prisma CLI). See each `.env.example`.
+- Env files: `apps/web/.env` (`API_URL`), `apps/api/.env` (runtime) and `packages/db/.env` (Prisma CLI). See each `.env.example`.
+- Only `apps/api` talks to the database. The web app imports `@genpos/db` for **types only**.
 - `@genpos/db` is plain JS (`export * from "@prisma/client"`) so it needs no build step for Next or Nest.
 
 ## Commands
 
 ```bash
-pnpm dev          # api (localhost:4000)
-pnpm dev:web      # web only (paused — does not build on the tenant schema)
+pnpm dev          # web (localhost:3000) + api (localhost:4000) in parallel
+pnpm dev:web      # web only (needs the api running)
 pnpm dev:api      # api only (Swagger at localhost:4000/api/docs)
 pnpm dev:mobile   # Expo / Metro (needs the api running)
-pnpm build        # build the api
-pnpm lint         # lint api + mobile
+pnpm build        # build api + web
+pnpm lint         # lint api + mobile (web: `next lint` was removed in Next 16 — no ESLint config yet)
+pnpm typecheck    # typecheck the web app
 
 pnpm db:migrate   # prisma migrate dev
 pnpm db:deploy    # prisma migrate deploy (apply committed migrations)
@@ -62,9 +64,16 @@ Expo SDK 58 / React Native 0.88. Read `apps/mobile/AGENTS.md` first — Expo API
 - Money: `useFormatCurrency()` from `src/lib/format.ts` (same locale rule as the web app)
 - Checks: `npx tsc --noEmit`, `npx expo lint`, `npx expo-doctor`
 
-## Web App Structure (`apps/web`) — paused
+## Web App (`apps/web`)
 
-The web app still targets the pre-tenancy schema (last working on branch `chore/monorepo-structure`). Next step: move it onto the REST API.
+All data goes through the REST API. Client components keep using tRPC hooks; each procedure in `src/server/routers/*` forwards to the API with `ctx.api<T>(path, …)` (tokens + `X-Shop-Id` from httpOnly cookies, API errors mapped to tRPC codes).
+
+- `src/server/api.ts` — server-only API client (`apiFetch`, cookie helpers, ISO dates revived to `Date`)
+- `src/server/api-types.ts` — response types built from Prisma payload types
+- `src/proxy.ts` — Next 16 proxy (ex-middleware): refreshes the access token from the refresh cookie before rendering and ensures an active-branch cookie
+- Auth pages: `/login`, `/signup`, `/onboarding` (create business); branch switcher in the header (`components/layout/branch-switcher.tsx`)
+
+### Structure
 
 ```
 src/
@@ -106,15 +115,12 @@ src/
 
 Prisma: `packages/db/prisma/schema.prisma` (source of truth), `migrations/`, `seed.ts`.
 
-## Auth
+## Auth (web)
 
-Custom cookie-based sessions — **no NextAuth**.
-
-- Cookie: `session_token` (httpOnly)
-- `getSession()` — reads cookie, validates against `Session` table, returns `AuthUser | null`
-- `requireAuth(roles?)` — server-side guard; redirects to `/login` if unauthenticated
-- Roles: `ADMIN` · `CASHIER` · `INVENTORY_MANAGER`
-- tRPC procedures: `publicProcedure`, `protectedProcedure`, `adminProcedure`
+- Cookies (httpOnly): `genpos_at` (access JWT), `genpos_rt` (refresh token), `genpos_shop` (active branch)
+- `getSession()` (`lib/auth.ts`) — `GET /auth/me` + `GET /businesses`, cached per request; returns user, active shop and all shops
+- `requireAuth(roles?)` — redirects to `/login`, or `/onboarding` when the user has no shop yet
+- Web roles stay `ADMIN · CASHIER · INVENTORY_MANAGER`: API `OWNER`/`MANAGER` show as `ADMIN` (`toWebRole`); authorization is enforced by the API
 
 ## Database Schema (key models)
 
@@ -147,18 +153,18 @@ Enums: `MemberRole`, `OrderStatus`, `OrderType`, `PaymentMethod`, `StockMovement
 ## Key Conventions
 
 - **RSC + Client split**: server component (`*-view.tsx`) fetches data, passes to a `"use client"` child (`*-view-client.tsx`) as props. The client wrapper uses `dynamic(..., { ssr: false })`.
-- **tRPC**: called server-side in RSC via `createCaller`; called client-side via `@trpc/react-query` hooks
+- **tRPC**: called client-side via `@trpc/react-query` hooks; procedures proxy to the REST API (no direct DB access)
 - **Forms**: react-hook-form + zod v4 (`z.flattenError` used in tRPC error formatter)
 - **UI**: shadcn/ui with slate base color, CSS variables, Tailwind v4, `@/components` alias
 - **IDs**: `cuid()` for all primary keys
 - **Timestamps**: `createdAt` / `updatedAt` on all models via Prisma defaults
 - **Currency**: always use `useFormatCurrency()` from `@/lib/currency-context` in client components that display prices
-- **Prisma include types**: use `Prisma.XxxGetPayload<{include: ...}>` for component prop types — tRPC does not always propagate include types through inference
+- **Response types**: add API response shapes to `src/server/api-types.ts` (Prisma payload types) and type `ctx.api<T>()` with them so `inferRouterOutputs` stays accurate
 - **Case-insensitive search**: use `mode: "insensitive" as const` in Prisma string filters
 
 ## Finance Module
 
-All finance routes are ADMIN-only (`requireAuth(["ADMIN"])`).
+All finance routes are ADMIN-only (`requireAuth(["ADMIN"])`; owners/managers in the API).
 
 Sub-routes under `/finance`:
 - `/finance` — overview with income vs expense chart and KPI cards
@@ -182,10 +188,12 @@ Shared sub-navigation: `src/components/finance/finance-nav.tsx` — include in e
 ## Environment Variables
 
 ```
-DATABASE_URL="postgresql://postgres:<password>@localhost:5432/genpos"
-SESSION_SECRET="<min 32 chars>"
+# apps/web/.env
+API_URL="http://localhost:4000/api/v1"
 NEXT_PUBLIC_APP_NAME="GenPOS"
 NEXT_PUBLIC_APP_URL="http://localhost:3000"
+
+# apps/api/.env — DATABASE_URL, JWT_SECRET, GOOGLE_CLIENT_IDS … (see apps/api/.env.example)
 ```
 
 ## Path Aliases

@@ -1,12 +1,10 @@
 import { z } from "zod";
 import { router, protectedProcedure, adminProcedure } from "@/lib/trpc/server";
-import { prisma } from "@/lib/prisma";
+import type { CurrentShop } from "@/server/api-types";
 
 export const shopRouter = router({
-  get: protectedProcedure.query(async () => {
-    const shop = await prisma.shop.findFirst();
-    return shop;
-  }),
+  /** The active branch with business-wide currency/language. */
+  get: protectedProcedure.query(({ ctx }) => ctx.api<CurrentShop>("/shop")),
 
   update: adminProcedure
     .input(
@@ -20,28 +18,18 @@ export const shopRouter = router({
         language: z.string().default("en"),
         taxRate: z.number().min(0).max(100).default(0),
         taxName: z.string().default("Tax"),
-      })
+      }),
     )
-    .mutation(async ({ input }) => {
-      const existing = await prisma.shop.findFirst();
-      if (existing) {
-        return prisma.shop.update({ where: { id: existing.id }, data: input });
-      }
-      return prisma.shop.create({ data: input });
-    }),
+    .mutation(({ input: { language, ...rest }, ctx }) =>
+      ctx.api<CurrentShop>("/shop", {
+        method: "PUT",
+        body: { ...rest, ...(language === "en" || language === "bn" ? { language } : {}) },
+      }),
+    ),
 
   setLanguage: adminProcedure
     .input(z.object({ language: z.enum(["en", "bn"]) }))
-    .mutation(async ({ input }) => {
-      const existing = await prisma.shop.findFirst();
-      if (existing) {
-        return prisma.shop.update({
-          where: { id: existing.id },
-          data: { language: input.language },
-        });
-      }
-      return prisma.shop.create({
-        data: { name: "My Shop", language: input.language },
-      });
-    }),
+    .mutation(({ input, ctx }) =>
+      ctx.api<CurrentShop>("/shop/language", { method: "PATCH", body: input }),
+    ),
 });

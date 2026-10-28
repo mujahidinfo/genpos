@@ -1,8 +1,6 @@
 import { z } from "zod";
 import { router, protectedProcedure, adminProcedure } from "@/lib/trpc/server";
-import { prisma } from "@/lib/prisma";
-import { TRPCError } from "@trpc/server";
-import type { Prisma } from "@genpos/db";
+import type { Paginated, Product, ProductDetail, ScannedProduct } from "@/server/api-types";
 
 export const productsRouter = router({
   list: protectedProcedure
@@ -17,79 +15,17 @@ export const productsRouter = router({
         })
         .optional(),
     )
-    .query(async ({ input }) => {
-      const {
-        search,
-        categoryId,
-        lowStock,
-        page = 1,
-        pageSize = 20,
-      } = input ?? {};
-      const skip = (page - 1) * pageSize;
-
-      const where: Prisma.ProductWhereInput = { isActive: true };
-      if (search) {
-        where.OR = [
-          { name: { contains: search, mode: "insensitive" } },
-          { sku: { contains: search, mode: "insensitive" } },
-          { barcode: { contains: search, mode: "insensitive" } },
-        ];
-      }
-      if (categoryId) where.categoryId = categoryId;
-
-      const [items, total] = await Promise.all([
-        prisma.product.findMany({
-          where,
-          include: {
-            category: true,
-            variants: true,
-            _count: { select: { orderItems: true } },
-          },
-          skip,
-          take: pageSize,
-          orderBy: { name: "asc" },
-        }),
-        prisma.product.count({ where }),
-      ]);
-
-      // Filter low stock after join
-      const filteredItems = lowStock
-        ? items.filter((p) => p.variants.some((v) => v.stock <= v.lowStock))
-        : items;
-
-      return { items: filteredItems, total, page, pageSize };
-    }),
+    .query(({ input, ctx }) => ctx.api<Paginated<Product>>("/products", { query: input })),
 
   getById: protectedProcedure
     .input(z.object({ id: z.string() }))
-    .query(async ({ input }) => {
-      const product = await prisma.product.findUnique({
-        where: { id: input.id },
-        include: {
-          category: true,
-          variants: true,
-          stockMovements: { orderBy: { createdAt: "desc" }, take: 20 },
-        },
-      });
-      if (!product) throw new TRPCError({ code: "NOT_FOUND" });
-      return product;
-    }),
+    .query(({ input, ctx }) => ctx.api<ProductDetail>(`/products/${input.id}`)),
 
   getByBarcode: protectedProcedure
     .input(z.object({ barcode: z.string() }))
-    .query(async ({ input }) => {
-      const product = await prisma.product.findFirst({
-        where: {
-          OR: [
-            { barcode: input.barcode },
-            { variants: { some: { barcode: input.barcode } } },
-          ],
-        },
-        include: { category: true, variants: true },
-      });
-      if (!product) throw new TRPCError({ code: "NOT_FOUND" });
-      return product;
-    }),
+    .query(({ input, ctx }) =>
+      ctx.api<ScannedProduct>(`/products/barcode/${encodeURIComponent(input.barcode)}`),
+    ),
 
   create: adminProcedure
     .input(
@@ -102,6 +38,9 @@ export const productsRouter = router({
         costPrice: z.number().min(0).default(0),
         categoryId: z.string().optional(),
         imageUrl: z.string().optional(),
+        // Simple products (no variants): opening stock in the active branch.
+        stock: z.number().int().optional(),
+        lowStock: z.number().int().min(0).optional(),
         variants: z
           .array(
             z.object({
@@ -116,16 +55,9 @@ export const productsRouter = router({
           .default([]),
       }),
     )
-    .mutation(async ({ input }) => {
-      const { variants, ...productData } = input;
-      return prisma.product.create({
-        data: {
-          ...productData,
-          variants: variants.length > 0 ? { create: variants } : undefined,
-        },
-        include: { category: true, variants: true },
-      });
-    }),
+    .mutation(({ input, ctx }) =>
+      ctx.api<ProductDetail>("/products", { method: "POST", body: input }),
+    ),
 
   update: adminProcedure
     .input(
@@ -142,63 +74,30 @@ export const productsRouter = router({
         isActive: z.boolean().optional(),
       }),
     )
-    .mutation(async ({ input }) => {
-      const { id, ...data } = input;
-      return prisma.product.update({
-        where: { id },
-        data,
-        include: { category: true, variants: true },
-      });
-    }),
+    .mutation(({ input: { id, ...data }, ctx }) =>
+      ctx.api<ProductDetail>(`/products/${id}`, { method: "PATCH", body: data }),
+    ),
 
   adjustStock: protectedProcedure
     .input(
       z.object({
         productId: z.string(),
-        variantId: z.string(),
+        variantId: z.string().optional(),
         type: z.enum(["IN", "OUT", "ADJUSTMENT", "RETURN"]),
         quantity: z.number().int(),
         note: z.string().optional(),
       }),
     )
-    .mutation(async ({ input }) => {
-      const variant = await prisma.productVariant.findUniqueOrThrow({
-        where: { id: input.variantId },
-      });
-      let newStock = variant.stock;
-      if (input.type === "IN" || input.type === "RETURN")
-        newStock += input.quantity;
-      else if (input.type === "OUT") newStock -= input.quantity;
-      else newStock = input.quantity; // ADJUSTMENT = set absolute
-
-      if (newStock < 0)
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "Insufficient stock",
-        });
-
-      await prisma.productVariant.update({
-        where: { id: input.variantId },
-        data: { stock: newStock },
-      });
-      await prisma.stockMovement.create({
-        data: {
-          productId: input.productId,
-          variantId: input.variantId,
-          type: input.type,
-          quantity: input.quantity,
-          note: input.note,
-        },
-      });
-      return { stock: newStock };
-    }),
+    .mutation(({ input: { productId, ...body }, ctx }) =>
+      ctx.api<{ variantId: string; stock: number }>(`/products/${productId}/stock`, {
+        method: "POST",
+        body,
+      }),
+    ),
 
   delete: adminProcedure
     .input(z.object({ id: z.string() }))
-    .mutation(async ({ input }) =>
-      prisma.product.update({
-        where: { id: input.id },
-        data: { isActive: false },
-      }),
+    .mutation(({ input, ctx }) =>
+      ctx.api<{ success: boolean }>(`/products/${input.id}`, { method: "DELETE" }),
     ),
 });

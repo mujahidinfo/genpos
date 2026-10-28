@@ -1,70 +1,80 @@
 import { z } from "zod";
-import bcrypt from "bcryptjs";
+import type { MemberRole } from "@genpos/db";
 import { router, adminProcedure, protectedProcedure } from "@/lib/trpc/server";
-import { prisma } from "@/lib/prisma";
-import { TRPCError } from "@trpc/server";
+import { toWebRole, type WebRole } from "@/lib/auth";
+import type { Member } from "@/server/api-types";
+
+/**
+ * The web settings screen still speaks the original three roles; staff are
+ * API memberships. "Admin" maps to Manager, and an Owner stays an Owner.
+ */
+const webRole = z.enum(["ADMIN", "CASHIER", "INVENTORY_MANAGER"]);
+
+function toMemberRole(role: WebRole, current?: MemberRole): MemberRole {
+  if (role === "ADMIN") return current === "OWNER" ? "OWNER" : "MANAGER";
+  return role;
+}
+
+/** The user row shape the settings UI was built for (id = membership id). */
+const toWebUser = (m: Member) => ({
+  id: m.id,
+  name: m.user.name,
+  email: m.user.email,
+  role: toWebRole(m.role),
+  isActive: m.isActive,
+  createdAt: m.createdAt,
+});
 
 export const usersRouter = router({
-  list: adminProcedure.query(async () => {
-    return prisma.user.findMany({
-      select: { id: true, name: true, email: true, role: true, isActive: true, createdAt: true },
-      orderBy: { createdAt: "desc" },
-    });
-  }),
+  list: adminProcedure.query(async ({ ctx }) =>
+    (await ctx.api<Member[]>("/members")).map(toWebUser),
+  ),
 
   create: adminProcedure
     .input(
       z.object({
         name: z.string().min(1),
         email: z.string().email(),
-        password: z.string().min(6),
-        role: z.enum(["ADMIN", "CASHIER", "INVENTORY_MANAGER"]),
-      })
+        password: z.string().min(8, "Use at least 8 characters"),
+        role: webRole,
+      }),
     )
-    .mutation(async ({ input }) => {
-      const existing = await prisma.user.findUnique({ where: { email: input.email } });
-      if (existing) throw new TRPCError({ code: "CONFLICT", message: "Email already in use" });
-      const passwordHash = await bcrypt.hash(input.password, 12);
-      return prisma.user.create({
-        data: { name: input.name, email: input.email, passwordHash, role: input.role },
-        select: { id: true, name: true, email: true, role: true, isActive: true, createdAt: true },
-      });
-    }),
+    .mutation(async ({ input, ctx }) =>
+      toWebUser(
+        await ctx.api<Member>("/members", {
+          method: "POST",
+          body: { ...input, role: toMemberRole(input.role) },
+        }),
+      ),
+    ),
 
   update: adminProcedure
     .input(
       z.object({
         id: z.string(),
         name: z.string().min(1).optional(),
-        role: z.enum(["ADMIN", "CASHIER", "INVENTORY_MANAGER"]).optional(),
+        role: webRole.optional(),
         isActive: z.boolean().optional(),
-      })
+      }),
     )
     .mutation(async ({ input, ctx }) => {
-      if (input.id === ctx.user.id && input.isActive === false) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "Cannot deactivate yourself" });
-      }
-      const { id, ...data } = input;
-      return prisma.user.update({
-        where: { id },
-        data,
-        select: { id: true, name: true, email: true, role: true, isActive: true },
-      });
+      const current = input.role
+        ? (await ctx.api<Member[]>("/members")).find((m) => m.id === input.id)
+        : undefined;
+      return toWebUser(
+        await ctx.api<Member>(`/members/${input.id}`, {
+          method: "PATCH",
+          body: {
+            isActive: input.isActive,
+            ...(input.role && { role: toMemberRole(input.role, current?.role) }),
+          },
+        }),
+      );
     }),
 
   changePassword: protectedProcedure
-    .input(
-      z.object({
-        currentPassword: z.string(),
-        newPassword: z.string().min(6),
-      })
-    )
-    .mutation(async ({ input, ctx }) => {
-      const user = await prisma.user.findUniqueOrThrow({ where: { id: ctx.user.id } });
-      const valid = await bcrypt.compare(input.currentPassword, user.passwordHash);
-      if (!valid) throw new TRPCError({ code: "UNAUTHORIZED", message: "Current password incorrect" });
-      const passwordHash = await bcrypt.hash(input.newPassword, 12);
-      await prisma.user.update({ where: { id: ctx.user.id }, data: { passwordHash } });
-      return { success: true };
-    }),
+    .input(z.object({ currentPassword: z.string(), newPassword: z.string().min(8, "Use at least 8 characters") }))
+    .mutation(({ input, ctx }) =>
+      ctx.api<{ success: boolean }>("/auth/password", { method: "PATCH", body: input }),
+    ),
 });
