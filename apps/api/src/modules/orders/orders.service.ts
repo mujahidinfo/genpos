@@ -48,7 +48,8 @@ export class OrdersService {
         },
         skip: (page - 1) * pageSize,
         take: pageSize,
-        orderBy: { createdAt: 'desc' },
+        // Newest first; id breaks ties so paging never repeats or skips a sale.
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       }),
       this.prisma.order.count({ where }),
     ]);

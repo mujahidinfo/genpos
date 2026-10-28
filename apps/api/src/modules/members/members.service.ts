@@ -12,6 +12,16 @@ import type { AddMemberDto, UpdateMemberDto } from './members.dto.js';
 const memberInclude = {
   user: { select: { id: true, name: true, email: true, avatarUrl: true } },
   shop: { select: { id: true, name: true } },
+  employee: {
+    select: { id: true, salary: true, salaryType: true, payDay: true, isActive: true },
+  },
+} as const;
+
+const ROLE_TITLE = {
+  OWNER: 'Owner',
+  MANAGER: 'Manager',
+  CASHIER: 'Cashier',
+  INVENTORY_MANAGER: 'Inventory manager',
 } as const;
 
 @Injectable()
@@ -57,7 +67,7 @@ export class MembersService {
       });
     }
 
-    return this.prisma.membership.create({
+    const created = await this.prisma.membership.create({
       data: {
         userId: user.id,
         businessId: tenant.businessId,
@@ -66,6 +76,11 @@ export class MembersService {
       },
       include: memberInclude,
     });
+    if (input.salary) {
+      await this.syncPayroll(tenant, created.id, user.name, input.role, input.salary, input.payDay);
+      return this.prisma.membership.findUniqueOrThrow({ where: { id: created.id }, include: memberInclude });
+    }
+    return created;
   }
 
   async update(
@@ -97,11 +112,59 @@ export class MembersService {
     }
     await this.assertShopInBusiness(tenant, input.shopId);
 
-    return this.prisma.membership.update({
+    const { salary, payDay, ...access } = input;
+    const updated = await this.prisma.membership.update({
       where: { id },
-      data: input,
+      data: access,
       include: memberInclude,
     });
+    if (salary !== undefined || payDay !== undefined) {
+      await this.syncPayroll(tenant, id, updated.user.name, updated.role, salary, payDay);
+      return this.prisma.membership.findUniqueOrThrow({ where: { id }, include: memberInclude });
+    }
+    return updated;
+  }
+
+  /** Keep the payroll entry for this person in step with the salary typed on the staff form. */
+  private async syncPayroll(
+    tenant: TenantContext,
+    membershipId: string,
+    name: string,
+    role: keyof typeof ROLE_TITLE,
+    salary: number | null | undefined,
+    payDay: number | undefined,
+  ) {
+    const existing = await this.prisma.employee.findUnique({ where: { membershipId } });
+    if (salary === null || salary === 0) {
+      if (existing) {
+        await this.prisma.employee.update({ where: { id: existing.id }, data: { isActive: false } });
+      }
+      return;
+    }
+    if (existing) {
+      await this.prisma.employee.update({
+        where: { id: existing.id },
+        data: {
+          name,
+          isActive: true,
+          ...(salary !== undefined && { salary, salaryType: 'MONTHLY' as const }),
+          ...(payDay !== undefined && { payDay }),
+        },
+      });
+    } else if (salary) {
+      await this.prisma.employee.create({
+        data: {
+          businessId: tenant.businessId,
+          membershipId,
+          name,
+          position: ROLE_TITLE[role],
+          salary,
+          salaryType: 'MONTHLY',
+          payDay: payDay ?? 1,
+          joinDate: new Date(),
+        },
+      });
+    }
   }
 
   private async assertShopInBusiness(

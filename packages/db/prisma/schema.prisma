@@ -68,6 +68,20 @@ enum ExpenseStatus {
   CANCELLED
 }
 
+/// Where an expense came from. Everything the business pays out lands in the
+/// same ledger; the source says how it got there.
+enum ExpenseSource {
+  MANUAL
+  SALARY
+  SUPPLIER_PAYMENT
+  RECURRING
+}
+
+enum RecurringFrequency {
+  WEEKLY
+  MONTHLY
+}
+
 enum BudgetPeriod {
   WEEKLY
   MONTHLY
@@ -97,6 +111,7 @@ model Business {
   expenseCategories ExpenseCategory[]
   employees         Employee[]
   expenses          Expense[]
+  recurringExpenses RecurringExpense[]
   budgets           Budget[]
   suppliers         Supplier[]
   purchases         Purchase[]
@@ -120,14 +135,15 @@ model Shop {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
-  business       Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  memberships    Membership[]
-  inventory      Inventory[]
-  stockMovements StockMovement[]
-  orders         Order[]
-  expenses       Expense[]
-  budgets        Budget[]
-  purchases      Purchase[]
+  business          Business           @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  memberships       Membership[]
+  inventory         Inventory[]
+  stockMovements    StockMovement[]
+  orders            Order[]
+  expenses          Expense[]
+  recurringExpenses RecurringExpense[]
+  budgets           Budget[]
+  purchases         Purchase[]
 
   @@index([businessId])
 }
@@ -143,9 +159,10 @@ model Membership {
   createdAt  DateTime   @default(now())
   updatedAt  DateTime   @updatedAt
 
-  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  shop     Shop?    @relation(fields: [shopId], references: [id], onDelete: SetNull)
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  business Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  shop     Shop?     @relation(fields: [shopId], references: [id], onDelete: SetNull)
+  employee Employee?
 
   @@unique([userId, businessId])
   @@index([businessId])
@@ -389,60 +406,101 @@ model ExpenseCategory {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  business Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  expenses Expense[]
-  budgets  Budget[]
+  business  Business           @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  expenses  Expense[]
+  budgets   Budget[]
+  recurring RecurringExpense[]
 
   @@unique([businessId, name])
 }
 
 model Employee {
-  id         String     @id @default(cuid())
-  businessId String
-  name       String
-  email      String?
-  phone      String?
-  position   String
-  salary     Float
-  salaryType SalaryType @default(MONTHLY)
-  joinDate   DateTime
-  isActive   Boolean    @default(true)
-  notes      String?
-  createdAt  DateTime   @default(now())
-  updatedAt  DateTime   @updatedAt
+  id           String     @id @default(cuid())
+  businessId   String
+  name         String
+  email        String?
+  phone        String?
+  position     String
+  salary       Float
+  salaryType   SalaryType @default(MONTHLY)
+  joinDate     DateTime
+  isActive     Boolean    @default(true)
+  notes        String?
+  // Day of the month salary is due (1–28)
+  payDay       Int        @default(1)
+  // Set when this person also signs in to the app
+  membershipId String?    @unique
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
 
-  business Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  expenses Expense[]
+  business   Business    @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  membership Membership? @relation(fields: [membershipId], references: [id], onDelete: SetNull)
+  expenses   Expense[]
 
   @@unique([businessId, email])
   @@index([businessId, isActive])
 }
 
 model Expense {
-  id            String        @id @default(cuid())
-  businessId    String
-  shopId        String
-  title         String
-  amount        Float
-  date          DateTime
-  categoryId    String
-  employeeId    String?
-  paymentMethod PaymentMethod @default(CASH)
-  status        ExpenseStatus @default(PAID)
-  isRecurring   Boolean       @default(false)
-  notes         String?
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  id                String        @id @default(cuid())
+  businessId        String
+  shopId            String
+  title             String
+  amount            Float
+  date              DateTime
+  categoryId        String
+  employeeId        String?
+  paymentMethod     PaymentMethod @default(CASH)
+  status            ExpenseStatus @default(PAID)
+  isRecurring       Boolean       @default(false)
+  notes             String?
+  source            ExpenseSource @default(MANUAL)
+  // Set when the expense mirrors a supplier payment (kept in step with it)
+  supplierPaymentId String?       @unique
+  // Which bill template produced it
+  recurringId       String?
+  // "2026-10" for salaries, so one month can't be paid twice by accident
+  periodKey         String?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
 
-  business Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  shop     Shop            @relation(fields: [shopId], references: [id], onDelete: Cascade)
-  category ExpenseCategory @relation(fields: [categoryId], references: [id])
-  employee Employee?       @relation(fields: [employeeId], references: [id])
+  business        Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  shop            Shop              @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  category        ExpenseCategory   @relation(fields: [categoryId], references: [id])
+  employee        Employee?         @relation(fields: [employeeId], references: [id])
+  supplierPayment SupplierPayment?  @relation(fields: [supplierPaymentId], references: [id], onDelete: SetNull)
+  recurring       RecurringExpense? @relation(fields: [recurringId], references: [id], onDelete: SetNull)
 
   @@index([shopId, date])
   @@index([categoryId])
   @@index([employeeId])
   @@index([status])
+  @@index([employeeId, periodKey])
+}
+
+/// A bill that repeats (rent, internet…). When it falls due the owner confirms
+/// the amount and it becomes an Expense; the next due date then moves on.
+model RecurringExpense {
+  id            String             @id @default(cuid())
+  businessId    String
+  shopId        String
+  title         String
+  amount        Float
+  categoryId    String
+  paymentMethod PaymentMethod      @default(CASH)
+  frequency     RecurringFrequency @default(MONTHLY)
+  nextDueDate   DateTime
+  isActive      Boolean            @default(true)
+  notes         String?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  business Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  shop     Shop            @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  category ExpenseCategory @relation(fields: [categoryId], references: [id])
+  expenses Expense[]
+
+  @@index([shopId, isActive, nextDueDate])
 }
 
 model Budget {
@@ -544,6 +602,7 @@ model SupplierPayment {
   business Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
   supplier Supplier  @relation(fields: [supplierId], references: [id], onDelete: Cascade)
   purchase Purchase? @relation(fields: [purchaseId], references: [id], onDelete: SetNull)
+  expense  Expense?
 
   @@index([supplierId])
 }

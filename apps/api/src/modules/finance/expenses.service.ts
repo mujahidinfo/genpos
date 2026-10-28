@@ -21,6 +21,7 @@ export class ExpensesService {
       ...(input.employeeId && { employeeId: input.employeeId }),
       ...(input.status && { status: input.status }),
       ...(input.paymentMethod && { paymentMethod: input.paymentMethod }),
+      ...(input.source && { source: input.source }),
       ...((input.from || input.to) && {
         date: {
           ...(input.from && { gte: startOfDay(input.from) }),
@@ -35,7 +36,7 @@ export class ExpensesService {
       }),
     };
 
-    const [items, total] = await Promise.all([
+    const [items, total, sum] = await Promise.all([
       this.prisma.expense.findMany({
         where,
         include: {
@@ -47,11 +48,17 @@ export class ExpensesService {
         take: pageSize,
       }),
       this.prisma.expense.count({ where }),
+      // What the filtered list adds up to (cancelled entries don't count).
+      this.prisma.expense.aggregate({
+        where: { ...where, status: { not: 'CANCELLED' } },
+        _sum: { amount: true },
+      }),
     ]);
 
     return {
       items,
       total,
+      totalAmount: sum._sum.amount ?? 0,
       page,
       pageSize,
       pages: Math.ceil(total / pageSize),
@@ -71,6 +78,7 @@ export class ExpensesService {
   }
 
   async update(tenant: TenantContext, id: string, input: UpdateExpenseDto) {
+    await this.assertEditable(tenant, id);
     await this.assertRefs(tenant, input);
     return this.prisma.expense.update({
       where: { id, shopId: tenant.shopId },
@@ -79,8 +87,22 @@ export class ExpensesService {
     });
   }
 
-  delete(tenant: TenantContext, id: string) {
+  async delete(tenant: TenantContext, id: string) {
+    await this.assertEditable(tenant, id);
     return this.prisma.expense.delete({ where: { id, shopId: tenant.shopId } });
+  }
+
+  /** Supplier payments are edited from the supplier, so the two never disagree. */
+  private async assertEditable(tenant: TenantContext, id: string) {
+    const expense = await this.prisma.expense.findFirst({
+      where: { id, shopId: tenant.shopId },
+      select: { source: true },
+    });
+    if (expense?.source === 'SUPPLIER_PAYMENT') {
+      throw new BadRequestException(
+        'This comes from a supplier payment and can’t be changed here',
+      );
+    }
   }
 
   /** Category and employee must belong to this business. */

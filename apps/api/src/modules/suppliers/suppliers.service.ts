@@ -3,10 +3,14 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type { Prisma } from '@genpos/db';
+import type { PaymentMethod, Prisma } from '@genpos/db';
 import type { TenantContext } from '../../common/types.js';
 import { generatePurchaseNumber, round2 } from '../../common/utils.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
+import {
+  ensureExpenseCategory,
+  STOCK_CATEGORY,
+} from '../finance/finance.ledger.js';
 import type {
   CreatePurchaseDto,
   CreateSupplierDto,
@@ -87,9 +91,12 @@ export class SuppliersService {
     supplierId: string,
     input: CreateSupplierPaymentDto,
   ) {
-    await this.assertSupplier(tenant, supplierId);
-    await this.prisma.supplierPayment.create({
-      data: { ...input, supplierId, businessId: tenant.businessId },
+    const supplier = await this.assertSupplier(tenant, supplierId);
+    await this.prisma.$transaction(async (tx) => {
+      const payment = await tx.supplierPayment.create({
+        data: { ...input, supplierId, businessId: tenant.businessId },
+      });
+      await this.recordAsExpense(tx, tenant, payment, supplier.name);
     });
     return this.getById(tenant, supplierId);
   }
@@ -135,7 +142,9 @@ export class SuppliersService {
     input: CreatePurchaseDto,
     userId: string,
   ) {
-    if (input.supplierId) await this.assertSupplier(tenant, input.supplierId);
+    const supplier = input.supplierId
+      ? await this.assertSupplier(tenant, input.supplierId)
+      : null;
 
     const products = await this.prisma.product.findMany({
       where: {
@@ -223,16 +232,17 @@ export class SuppliersService {
         }
       }
 
-      if (input.supplierId && input.paidAmount > 0) {
-        await tx.supplierPayment.create({
+      if (supplier && input.paidAmount > 0) {
+        const payment = await tx.supplierPayment.create({
           data: {
             businessId: tenant.businessId,
-            supplierId: input.supplierId,
+            supplierId: supplier.id,
             purchaseId: created.id,
             amount: input.paidAmount,
             paymentMethod: input.paymentMethod,
           },
         });
+        await this.recordAsExpense(tx, tenant, payment, supplier.name);
       }
       return created;
     });
@@ -316,6 +326,41 @@ export class SuppliersService {
       where: { id, businessId: tenant.businessId },
     });
     if (!found) throw new BadRequestException('Unknown supplier');
+    return found;
+  }
+
+  /** Money paid to a supplier is spending: mirror it into the expense ledger. */
+  private async recordAsExpense(
+    tx: Prisma.TransactionClient,
+    tenant: TenantContext,
+    payment: {
+      id: string;
+      amount: number;
+      paymentMethod: PaymentMethod;
+      note: string | null;
+    },
+    supplierName: string,
+  ) {
+    const category = await ensureExpenseCategory(
+      tx,
+      tenant.businessId,
+      STOCK_CATEGORY,
+    );
+    await tx.expense.create({
+      data: {
+        businessId: tenant.businessId,
+        shopId: tenant.shopId,
+        title: `Paid ${supplierName}`,
+        amount: payment.amount,
+        date: new Date(),
+        categoryId: category.id,
+        paymentMethod: payment.paymentMethod,
+        status: 'PAID',
+        source: 'SUPPLIER_PAYMENT',
+        supplierPaymentId: payment.id,
+        notes: payment.note ?? undefined,
+      },
+    });
   }
 
   /** totalPurchased / totalPaid / due per supplier (business-wide). */

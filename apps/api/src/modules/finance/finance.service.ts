@@ -40,6 +40,7 @@ export class FinanceService {
       budgetCount,
       recentExpenses,
       expenseGroups,
+      sourceGroups,
       monthlyTrend,
     ] = await Promise.all([
       this.prisma.expense.aggregate({
@@ -71,6 +72,11 @@ export class FinanceService {
         where: { ...shopExpenses, date: { gte: from, lte: to } },
         _sum: { amount: true },
       }),
+      this.prisma.expense.groupBy({
+        by: ['source'],
+        where: { ...shopExpenses, date: { gte: from, lte: to } },
+        _sum: { amount: true },
+      }),
       this.monthlyTrend(tenant),
     ]);
 
@@ -99,6 +105,10 @@ export class FinanceService {
       budgetCount,
       recentExpenses,
       expensesByCategory,
+      expensesBySource: sourceGroups.map((g) => ({
+        source: g.source,
+        amount: round2(g._sum.amount ?? 0),
+      })),
       monthlyTrend,
     };
   }

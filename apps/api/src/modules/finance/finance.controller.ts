@@ -15,18 +15,26 @@ import { BudgetsService } from './budgets.service.js';
 import { EmployeesService } from './employees.service.js';
 import { ExpenseCategoriesService } from './expense-categories.service.js';
 import { ExpensesService } from './expenses.service.js';
+import { PayrollService } from './payroll.service.js';
+import { RecurringService } from './recurring.service.js';
 import {
   CreateBudgetDto,
   CreateEmployeeDto,
   CreateExpenseCategoryDto,
   CreateExpenseDto,
+  CreateRecurringDto,
   FinanceOverviewQueryDto,
   FinanceReportQueryDto,
   ListExpensesQueryDto,
+  PayRecurringDto,
+  PayrollQueryDto,
+  PaySalaryDto,
+  UpcomingQueryDto,
   UpdateBudgetDto,
   UpdateEmployeeDto,
   UpdateExpenseCategoryDto,
   UpdateExpenseDto,
+  UpdateRecurringDto,
 } from './finance.dto.js';
 import { FinanceService } from './finance.service.js';
 
@@ -37,7 +45,23 @@ import { FinanceService } from './finance.service.js';
 @Roles(...MANAGERS)
 @Controller('finance')
 export class FinanceController {
-  constructor(private readonly finance: FinanceService) {}
+  constructor(
+    private readonly finance: FinanceService,
+    private readonly recurring: RecurringService,
+    private readonly payroll: PayrollService,
+  ) {}
+
+  /** Bills and salaries that are overdue or due soon — what to pay next. */
+  @Get('upcoming')
+  upcoming(@Tenant() tenant: TenantContext, @Query() query: UpcomingQueryDto) {
+    return this.recurring.upcoming(tenant, query.days);
+  }
+
+  /** Salaries for a month (`?month=2026-10`): who is owed and who is paid. */
+  @Get('payroll')
+  payrollMonth(@Tenant() tenant: TenantContext, @Query() query: PayrollQueryDto) {
+    return this.payroll.month(tenant, query.month);
+  }
 
   @Get('overview')
   overview(
@@ -128,7 +152,20 @@ export class ExpensesController {
 @Roles(...MANAGERS)
 @Controller('finance/employees')
 export class EmployeesController {
-  constructor(private readonly employees: EmployeesService) {}
+  constructor(
+    private readonly employees: EmployeesService,
+    private readonly payroll: PayrollService,
+  ) {}
+
+  /** Pay a month's salary; it is recorded as an expense. */
+  @Post(':id/pay')
+  pay(
+    @Tenant() tenant: TenantContext,
+    @Param('id') id: string,
+    @Body() body: PaySalaryDto,
+  ) {
+    return this.payroll.pay(tenant, id, body);
+  }
 
   @Get()
   list(@Tenant() tenant: TenantContext) {
@@ -147,6 +184,48 @@ export class EmployeesController {
     @Body() body: UpdateEmployeeDto,
   ) {
     return this.employees.update(tenant, id, body);
+  }
+}
+
+@ApiTags('finance / recurring')
+@ApiBearerAuth()
+@Roles(...MANAGERS)
+@Controller('finance/recurring')
+export class RecurringController {
+  constructor(private readonly recurring: RecurringService) {}
+
+  @Get()
+  list(@Tenant() tenant: TenantContext) {
+    return this.recurring.list(tenant);
+  }
+
+  @Post()
+  create(@Tenant() tenant: TenantContext, @Body() body: CreateRecurringDto) {
+    return this.recurring.create(tenant, body);
+  }
+
+  @Patch(':id')
+  update(
+    @Tenant() tenant: TenantContext,
+    @Param('id') id: string,
+    @Body() body: UpdateRecurringDto,
+  ) {
+    return this.recurring.update(tenant, id, body);
+  }
+
+  @Delete(':id')
+  delete(@Tenant() tenant: TenantContext, @Param('id') id: string) {
+    return this.recurring.delete(tenant, id);
+  }
+
+  /** Confirm a bill as paid (optionally with a different amount). */
+  @Post(':id/pay')
+  pay(
+    @Tenant() tenant: TenantContext,
+    @Param('id') id: string,
+    @Body() body: PayRecurringDto,
+  ) {
+    return this.recurring.pay(tenant, id, body);
   }
 }
 

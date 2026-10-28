@@ -12,6 +12,9 @@ export class AddMemberDto extends createZodDto(
     role: roleSchema,
     // Pin the staff member to one branch; omit for all branches.
     shopId: z.string().optional(),
+    // Monthly pay; adds them to payroll
+    salary: z.number().positive().finite().optional(),
+    payDay: z.number().int().min(1).max(28).optional(),
   }),
 ) {}
 
@@ -20,5 +23,8 @@ export class UpdateMemberDto extends createZodDto(
     role: roleSchema.optional(),
     isActive: z.boolean().optional(),
     shopId: z.string().nullable().optional(),
+    // null or 0 takes them off payroll
+    salary: z.number().nonnegative().finite().nullable().optional(),
+    payDay: z.number().int().min(1).max(28).optional(),
   }),
 ) {}

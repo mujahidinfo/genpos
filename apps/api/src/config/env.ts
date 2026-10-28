@@ -14,6 +14,8 @@ const envSchema = z.object({
   // Comma-separated Google OAuth client IDs (web, Android, iOS) whose ID tokens
   // we accept. Empty = Google sign-in disabled.
   GOOGLE_CLIENT_IDS: z.string().default(''),
+  // UploadThing server token for product photos. Empty = uploads disabled.
+  UPLOADTHING_TOKEN: z.string().default(''),
 });
 
 export type Env = z.infer<typeof envSchema>;
