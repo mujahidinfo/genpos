@@ -99,6 +99,7 @@ export default function CheckoutScreen() {
         ...(discountAmt > 0 && { discountType, discountValue }),
         taxRate,
         customerId,
+        status: 'FULFILLED',
       });
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setCompleted(order);

@@ -23,7 +23,7 @@ export default function AppTabs() {
           <TabTrigger name="orders" href="/orders" asChild>
             <TabButton>Orders</TabButton>
           </TabTrigger>
-          <TabTrigger name="account" href="/account" asChild>
+          <TabTrigger name="more" href="/more" asChild>
             <TabButton>More</TabButton>
           </TabTrigger>
         </CustomTabList>

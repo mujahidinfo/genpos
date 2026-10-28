@@ -1,17 +1,23 @@
+import { router } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, RefreshControl, View } from 'react-native';
 
 import { useOrders } from '@/api/queries';
-import type { OrderStatus } from '@/api/types';
+import type { Order, OrderStatus, PaymentMethod } from '@/api/types';
 import { OrderStatusBadge } from '@/components/badge';
-import { ListRow, ListSeparator } from '@/components/list-row';
-import { ListSearch } from '@/components/list-search';
+import { FilterBar } from '@/components/filter-bar';
+import type { IconName } from '@/components/icon';
+import { Icon } from '@/components/icon';
+import { IconTile, TINT } from '@/components/icon-tile';
 import { QueryState } from '@/components/query-state';
 import { ThemedText } from '@/components/themed-text';
-import { Spacing } from '@/constants/theme';
+import { BottomTabInset, Radius, Spacing } from '@/constants/theme';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { useTheme } from '@/hooks/use-theme';
 import { formatRelativeDay, useFormatCurrency } from '@/lib/format';
+
+const BOTTOM_OFFSET = (process.env.EXPO_OS === 'ios' ? BottomTabInset : 0) + Spacing.three;
+const CARD_SHADOW = '0 1px 2px rgba(15, 23, 42, 0.06), 0 4px 12px rgba(15, 23, 42, 0.03)';
 
 const FILTERS: { label: string; value?: OrderStatus }[] = [
   { label: 'All' },
@@ -21,6 +27,13 @@ const FILTERS: { label: string; value?: OrderStatus }[] = [
   { label: 'Canceled', value: 'CANCELED' },
 ];
 
+const PAYMENT: Record<PaymentMethod, { label: string; icon: IconName; tint: string }> = {
+  CASH: { label: 'Cash', icon: 'money', tint: TINT.emerald },
+  CARD: { label: 'Card', icon: 'receipt', tint: TINT.indigo },
+  MOBILE_MONEY: { label: 'Mobile money', icon: 'phone', tint: TINT.violet },
+  BANK_TRANSFER: { label: 'Bank transfer', icon: 'branches', tint: TINT.sky },
+};
+
 export default function OrdersScreen() {
   const theme = useTheme();
   const formatCurrency = useFormatCurrency();
@@ -29,57 +42,35 @@ export default function OrdersScreen() {
   const debouncedSearch = useDebouncedValue(search.trim());
   const query = useOrders({ search: debouncedSearch, status });
 
-  const orders = query.data?.pages.flatMap((p) => p.items) ?? [];
+  // The API returns newest first; sort again so a page merge can never reorder.
+  const orders = (query.data?.pages.flatMap((p) => p.items) ?? []).sort(
+    (a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt),
+  );
+  const filtered = Boolean(debouncedSearch || status);
 
   return (
-    <>
-      <ListSearch placeholder="Order # or customer" onChangeText={setSearch} />
+    <View style={{ flex: 1, backgroundColor: theme.background }}>
+      <FilterBar
+        search={search}
+        onSearch={setSearch}
+        placeholder="Order # or customer"
+        chips={FILTERS}
+        selected={status}
+        onSelect={setStatus}
+      />
       <FlatList
         data={orders}
         keyExtractor={(o) => o.id}
-        contentInsetAdjustmentBehavior="automatic"
-        contentContainerStyle={{ flexGrow: 1 }}
-        ListHeaderComponent={
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.filters}>
-            {FILTERS.map((f) => {
-              const selected = f.value === status;
-              return (
-                <Pressable
-                  key={f.label}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected }}
-                  onPress={() => setStatus(f.value)}
-                  style={[
-                    styles.chip,
-                    {
-                      backgroundColor: selected ? theme.primary : theme.backgroundElement,
-                      borderColor: selected ? theme.primary : theme.border,
-                    },
-                  ]}>
-                  <ThemedText type="small" style={{ color: selected ? theme.onPrimary : theme.text }}>
-                    {f.label}
-                  </ThemedText>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-        }
-        ItemSeparatorComponent={ListSeparator}
-        renderItem={({ item }) => {
-          const itemCount = item.items.reduce((n, i) => n + i.quantity, 0);
-          return (
-            <ListRow
-              href={{ pathname: '/orders/[id]', params: { id: item.id } }}
-              title={item.customer?.name ?? 'Walk-in customer'}
-              subtitle={`${item.orderNumber} · ${itemCount} item${itemCount === 1 ? '' : 's'} · ${formatRelativeDay(item.createdAt)}`}
-              value={formatCurrency(item.total)}
-              meta={<OrderStatusBadge status={item.status} />}
-            />
-          );
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        contentContainerStyle={{
+          flexGrow: 1,
+          padding: Spacing.three,
+          paddingTop: Spacing.one,
+          paddingBottom: BOTTOM_OFFSET,
+          gap: Spacing.two + 2,
         }}
+        renderItem={({ item }) => <OrderCard order={item} total={formatCurrency(item.total)} />}
         refreshControl={
           <RefreshControl
             refreshing={query.isRefetching && !query.isFetchingNextPage}
@@ -94,8 +85,8 @@ export default function OrdersScreen() {
             isLoading={query.isLoading}
             error={query.error}
             onRetry={query.refetch}
-            emptyTitle={debouncedSearch || status ? 'No matching orders' : 'No orders yet'}
-            emptyMessage={debouncedSearch || status ? 'Try a different search or filter.' : undefined}
+            emptyTitle={filtered ? 'No matching orders' : 'No orders yet'}
+            emptyMessage={filtered ? 'Try a different search or filter.' : 'Sales you ring up on the Sell tab show up here.'}
           />
         }
         ListFooterComponent={
@@ -106,20 +97,59 @@ export default function OrdersScreen() {
           ) : undefined
         }
       />
-    </>
+    </View>
   );
 }
 
-const styles = StyleSheet.create({
-  filters: {
-    gap: Spacing.two,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
-  },
-  chip: {
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: 6,
-  },
-});
+function OrderCard({ order, total }: { order: Order; total: string }) {
+  const theme = useTheme();
+  const count = order.items.reduce((n, i) => n + i.quantity, 0);
+  const pay = PAYMENT[order.paymentMethod];
+  // The first line names the sale when there's no customer ("Milk +2 more").
+  const first = order.items[0]?.name;
+  const title = order.customer?.name ?? 'Walk-in sale';
+  const detail = [
+    `${count} item${count === 1 ? '' : 's'}`,
+    first && !order.customer ? first + (order.items.length > 1 ? ` +${order.items.length - 1}` : '') : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${order.orderNumber}, ${total}`}
+      onPress={() => router.push({ pathname: '/orders/[id]', params: { id: order.id } })}
+      style={({ pressed }) => ({
+        gap: Spacing.two + 2,
+        padding: Spacing.three,
+        borderRadius: Radius.lg + 4,
+        borderCurve: 'continuous',
+        backgroundColor: theme.backgroundElement,
+        boxShadow: CARD_SHADOW,
+        transform: [{ scale: pressed ? 0.98 : 1 }],
+      })}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.three }}>
+        <IconTile name={pay.icon} tint={pay.tint} size={44} />
+        <View style={{ flex: 1, gap: 2 }}>
+          <ThemedText type="smallBold" style={{ fontSize: 16 }} numberOfLines={1}>
+            {title}
+          </ThemedText>
+          <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1}>
+            {detail}
+          </ThemedText>
+        </View>
+        <ThemedText type="smallBold" style={{ fontSize: 16, fontVariant: ['tabular-nums'] }}>
+          {total}
+        </ThemedText>
+      </View>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.two }}>
+        <OrderStatusBadge status={order.status} />
+        <ThemedText type="caption" themeColor="textSecondary" style={{ flex: 1 }} numberOfLines={1}>
+          {order.orderNumber} · {pay.label} · {formatRelativeDay(order.createdAt)}
+        </ThemedText>
+        <Icon name="chevronRight" size={14} color={theme.textSecondary} />
+      </View>
+    </Pressable>
+  );
+}

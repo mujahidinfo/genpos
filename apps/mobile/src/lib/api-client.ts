@@ -97,6 +97,7 @@ function buildUrl(path: string, query?: RequestOptions['query']) {
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { method = 'GET', body, query, auth = true } = options;
+  const isFormData = body instanceof FormData;
 
   let res: Response;
   try {
@@ -104,11 +105,12 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
       method,
       headers: {
         Accept: 'application/json',
-        ...(body !== undefined && { 'Content-Type': 'application/json' }),
+        // FormData sets its own multipart boundary header.
+        ...(body !== undefined && !isFormData && { 'Content-Type': 'application/json' }),
         ...(auth && accessToken && { Authorization: `Bearer ${accessToken}` }),
         ...(auth && shopId && { 'X-Shop-Id': shopId }),
       },
-      body: body !== undefined ? JSON.stringify(body) : undefined,
+      body: isFormData ? (body as FormData) : body !== undefined ? JSON.stringify(body) : undefined,
     });
   } catch (cause) {
     throw new ApiError(0, `Can't reach the server at ${API_URL}`, cause);

@@ -1,24 +1,36 @@
 import * as Haptics from 'expo-haptics';
-import { router, Stack, useIsFocused } from 'expo-router';
-import { useRef, useState } from 'react';
-import { Alert, FlatList, Platform, Pressable, StyleSheet, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { router, useIsFocused } from 'expo-router';
+import { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, FlatList, ScrollView, View } from 'react-native';
 
-import { findByBarcode } from '@/api/queries';
-import type { ScannedProduct } from '@/api/types';
+import { findByBarcode, useCategories, useProducts } from '@/api/queries';
+import type { Product } from '@/api/types';
 import { BarcodeScanner } from '@/components/barcode-scanner';
-import { Button } from '@/components/button';
 import { CartRow } from '@/components/cart-row';
-import { HeaderButton } from '@/components/header-button';
+import { Chip } from '@/components/choice';
+import { Icon } from '@/components/icon';
 import { ListSeparator } from '@/components/list-row';
+import { QueryState } from '@/components/query-state';
+import { CartBar } from '@/components/sell/cart-bar';
+import { ModeToggle, type SellMode } from '@/components/sell/mode-toggle';
+import { ProductCard } from '@/components/sell/product-card';
+import { SearchPill } from '@/components/sell/search-pill';
+import { VariantSheet } from '@/components/sell/variant-sheet';
 import { ThemedText } from '@/components/themed-text';
-import { Radius, Spacing } from '@/constants/theme';
+import { BottomTabInset, Radius, Spacing } from '@/constants/theme';
+import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { useTheme } from '@/hooks/use-theme';
 import { ApiError } from '@/lib/api-client';
 import { lineFor, useCart } from '@/lib/cart';
 import { useFormatCurrency } from '@/lib/format';
 import { canEditCatalog } from '@/lib/roles';
+import { secureStorage } from '@/lib/secure-storage';
 import { useActiveShop } from '@/lib/session';
+
+const MODE_KEY = 'genpos.sellMode';
+const HIGHLIGHT_MS = 1200;
+// The native tab bar floats over content on iOS.
+const BOTTOM_OFFSET = (process.env.EXPO_OS === 'ios' ? BottomTabInset : 0) + Spacing.three;
 
 type ScanStatus =
   | { kind: 'idle' }
@@ -26,61 +38,97 @@ type ScanStatus =
   | { kind: 'added'; name: string }
   | { kind: 'error'; message: string };
 
-const HIGHLIGHT_MS = 1200;
+/** The single variant a tap should add, or null when the user must choose. */
+function quickVariant(product: Product) {
+  return (
+    product.variants.find((v) => v.isDefault)?.id ??
+    (product.variants.length === 1 ? product.variants[0].id : null)
+  );
+}
 
 export default function SellScreen() {
   const theme = useTheme();
-  const insets = useSafeAreaInsets();
   const isFocused = useIsFocused();
   const shop = useActiveShop();
   const cart = useCart();
   const formatCurrency = useFormatCurrency();
+  const canAddProducts = canEditCatalog(shop.role);
 
+  const [mode, setMode] = useState<SellMode>('browse');
+  const [search, setSearch] = useState('');
+  const [categoryId, setCategoryId] = useState<string | undefined>();
   const [status, setStatus] = useState<ScanStatus>({ kind: 'idle' });
-  const [pickVariantOf, setPickVariantOf] = useState<ScannedProduct | null>(null);
-  // Codes already looked up this session: repeat scans are instant and work offline.
-  const cache = useRef(new Map<string, ScannedProduct>());
-  const busy = useRef(false);
-  // Briefly tint the line that was just scanned so the cashier sees where it went.
+  const [pickVariantOf, setPickVariantOf] = useState<Product | null>(null);
   const [highlighted, setHighlighted] = useState<string | null>(null);
   const highlightTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scanCache = useRef(new Map<string, Product & { matchedVariantId: string | null }>());
+  const busy = useRef(false);
 
-  const addToCart = (product: ScannedProduct, variantId: string) => {
+  const debounced = useDebouncedValue(search.trim(), 250);
+  const showGrid = mode === 'browse' || debounced.length > 0;
+  const products = useProducts(debounced, categoryId);
+  const categories = useCategories();
+  const items = products.data?.pages.flatMap((p) => p.items) ?? [];
+
+  // Remember how this cashier likes to sell (scan vs. tap).
+  useEffect(() => {
+    void secureStorage.get(MODE_KEY).then((saved) => {
+      if (saved === 'scan' || saved === 'browse') setMode(saved);
+    });
+  }, []);
+
+  const changeMode = (next: SellMode) => {
+    setMode(next);
+    void secureStorage.set(MODE_KEY, next);
+  };
+
+  const add = (product: Product, variantId: string) => {
     cart.add(lineFor(product, variantId));
     setHighlighted(variantId);
     if (highlightTimer.current) clearTimeout(highlightTimer.current);
     highlightTimer.current = setTimeout(() => setHighlighted(null), HIGHLIGHT_MS);
-    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    setStatus({ kind: 'added', name: product.name });
   };
+
+  const addProduct = (product: Product) => {
+    const variantId = quickVariant(product);
+    if (variantId) add(product, variantId);
+    else setPickVariantOf(product);
+  };
+
+  const decreaseProduct = (product: Product) => {
+    // Lines are newest-first, so this takes back the most recent addition.
+    const line = cart.lines.find((l) => l.productId === product.id);
+    if (line) cart.setQuantity(line.variantId, line.quantity - 1);
+  };
+
+  const quantityOf = (productId: string) =>
+    cart.lines.reduce((n, l) => (l.productId === productId ? n + l.quantity : n), 0);
 
   const onScan = async (code: string) => {
     if (busy.current || pickVariantOf) return;
     busy.current = true;
     try {
-      let product = cache.current.get(code);
+      let product = scanCache.current.get(code);
       if (!product) {
         setStatus({ kind: 'looking', code });
         product = (await findByBarcode(code)) ?? undefined;
       }
-
       if (!product) {
         void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-        if (canEditCatalog(shop.role)) {
+        if (canAddProducts) {
           setStatus({ kind: 'idle' });
-          // New item on the shelf: add it to the catalog and the cart in one step.
           router.push({ pathname: '/new-product', params: { barcode: code, addToCart: '1' } });
         } else {
           setStatus({ kind: 'error', message: `${code} isn’t in your products. Ask a manager to add it.` });
         }
         return;
       }
-
-      cache.current.set(code, product);
+      scanCache.current.set(code, product);
       if (product.matchedVariantId) {
-        addToCart(product, product.matchedVariantId);
+        add(product, product.matchedVariantId);
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        setStatus({ kind: 'added', name: product.name });
       } else {
-        // A product-level barcode on a product with sizes/colours: ask which one.
         setStatus({ kind: 'idle' });
         setPickVariantOf(product);
       }
@@ -95,103 +143,148 @@ export default function SellScreen() {
     }
   };
 
-  const confirmClear = () => {
-    if (Platform.OS === 'web') return cart.clear();
-    Alert.alert('Clear this sale?', 'All items will be removed from the cart.', [
-      { text: 'Keep', style: 'cancel' },
-      { text: 'Clear', style: 'destructive', onPress: cart.clear },
-    ]);
-  };
+  const bottomSpace = cart.lines.length ? 96 + BOTTOM_OFFSET : BOTTOM_OFFSET;
 
   return (
-    <View style={[styles.screen, { backgroundColor: theme.background }]}>
-      <Stack.Screen
-        options={{
-          headerLeft: cart.lines.length
-            ? () => <HeaderButton title="Clear" tone="danger" onPress={confirmClear} />
-            : undefined,
-          headerRight: () => <HeaderButton title="Search" onPress={() => router.push('/add-item')} />,
-        }}
-      />
-
-      <View style={styles.scannerWrap}>
-        <BarcodeScanner
-          active={isFocused}
-          onScan={onScan}
-          overlay={<StatusPill status={status} />}
+    <View style={{ flex: 1, backgroundColor: theme.background }}>
+      {/* Search + mode */}
+      <View style={{ flexDirection: 'row', gap: Spacing.two, paddingHorizontal: Spacing.three, paddingTop: Spacing.two, paddingBottom: Spacing.two }}>
+        <SearchPill
+          value={search}
+          onChangeText={setSearch}
+          placeholder="Search products"
+          // Typing means looking for something by name: show the grid.
+          onFocus={() => mode === 'scan' && changeMode('browse')}
         />
+        <ModeToggle value={mode} onChange={changeMode} />
       </View>
 
-      {pickVariantOf && (
-        <View style={[styles.picker, { backgroundColor: theme.backgroundElement, borderColor: theme.border }]}>
-          <ThemedText type="smallBold">Which {pickVariantOf.name}?</ThemedText>
-          <View style={styles.pickerOptions}>
-            {pickVariantOf.variants.map((v) => (
-              <Pressable
-                key={v.id}
-                accessibilityRole="button"
-                onPress={() => {
-                  addToCart(pickVariantOf, v.id);
-                  setPickVariantOf(null);
-                }}
-                style={({ pressed }) => [
-                  styles.option,
-                  { borderColor: theme.border },
-                  pressed && { backgroundColor: theme.backgroundSelected },
-                ]}>
-                <ThemedText type="smallBold">{v.name}</ThemedText>
-                <ThemedText type="caption" themeColor="textSecondary">
-                  {v.stock} in stock
-                </ThemedText>
-              </Pressable>
-            ))}
-          </View>
-          <Button title="Cancel" variant="secondary" onPress={() => setPickVariantOf(null)} />
-        </View>
-      )}
+      {showGrid ? (
+        <>
+          {(categories.data?.length ?? 0) > 0 && !debounced && (
+            <View>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ gap: Spacing.two, paddingHorizontal: Spacing.three, paddingBottom: Spacing.two }}>
+                <Chip label="All" selected={!categoryId} onPress={() => setCategoryId(undefined)} />
+                {categories.data!.map((c) => (
+                  <Chip key={c.id} label={c.name} selected={categoryId === c.id} onPress={() => setCategoryId(c.id)} />
+                ))}
+              </ScrollView>
+            </View>
+          )}
 
-      <FlatList
-        data={cart.lines}
-        keyExtractor={(l) => l.variantId}
-        style={styles.list}
-        contentContainerStyle={cart.lines.length ? undefined : styles.emptyContainer}
-        ItemSeparatorComponent={ListSeparator}
-        renderItem={({ item }) => (
-          <CartRow
-            line={item}
-            highlighted={highlighted === item.variantId}
-            formatCurrency={formatCurrency}
-            onChangeQuantity={(q) => cart.setQuantity(item.variantId, q)}
+          <FlatList
+            data={items}
+            numColumns={2}
+            keyExtractor={(product) => product.id}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+            columnWrapperStyle={{ gap: Spacing.three }}
+            contentContainerStyle={{ flexGrow: 1, gap: Spacing.three, paddingHorizontal: Spacing.three, paddingTop: Spacing.one, paddingBottom: bottomSpace }}
+            renderItem={({ item, index }) => {
+              // Keep a lone last card half-width instead of stretching across.
+              const lone = items.length % 2 === 1 && index === items.length - 1;
+              const card = (
+                <ProductCard
+                  product={item}
+                  quantity={quantityOf(item.id)}
+                  formatCurrency={formatCurrency}
+                  onAdd={() => addProduct(item)}
+                  onDecrease={() => decreaseProduct(item)}
+                />
+              );
+              return lone ? (
+                <>
+                  {card}
+                  <View style={{ flex: 1 }} />
+                </>
+              ) : (
+                card
+              );
+            }}
+            onEndReached={() => products.hasNextPage && !products.isFetchingNextPage && products.fetchNextPage()}
+            onEndReachedThreshold={0.5}
+            ListEmptyComponent={
+              products.isLoading || products.error ? (
+                <QueryState isLoading={products.isLoading} error={products.error} onRetry={products.refetch} />
+              ) : (
+                <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: Spacing.two, padding: Spacing.five }}>
+                  <Icon name="box" size={34} color={theme.textSecondary} />
+                  <ThemedText type="smallBold">{debounced ? `No “${debounced}” found` : 'No products here yet'}</ThemedText>
+                  {canAddProducts && (
+                    <ThemedText type="small" themeColor="textSecondary" style={{ textAlign: 'center' }}>
+                      Add products from the Products tab.
+                    </ThemedText>
+                  )}
+                </View>
+              )
+            }
+            ListFooterComponent={
+              products.isFetchingNextPage ? <ActivityIndicator color={theme.primary} style={{ padding: Spacing.three }} /> : undefined
+            }
           />
-        )}
-        ListEmptyComponent={
-          <View style={styles.empty}>
-            <ThemedText type="subtitle">Ready to sell</ThemedText>
-            <ThemedText themeColor="textSecondary" style={styles.emptyText}>
-              Scan a barcode, or search for items without one.
-            </ThemedText>
-            <Button title="Search products" variant="secondary" onPress={() => router.push('/add-item')} />
-          </View>
-        }
-      />
+        </>
+      ) : (
+        <FlatList
+          data={cart.lines}
+          keyExtractor={(l) => l.variantId}
+          ItemSeparatorComponent={ListSeparator}
+          contentContainerStyle={{ flexGrow: 1, paddingBottom: bottomSpace }}
+          ListHeaderComponent={
+            <View style={{ paddingHorizontal: Spacing.three, paddingBottom: Spacing.three }}>
+              <BarcodeScanner
+                active={isFocused && !pickVariantOf}
+                height={260}
+                onScan={onScan}
+                overlay={<StatusPill status={status} />}
+              />
+            </View>
+          }
+          renderItem={({ item }) => (
+            <CartRow
+              line={item}
+              highlighted={highlighted === item.variantId}
+              formatCurrency={formatCurrency}
+              onChangeQuantity={(q) => cart.setQuantity(item.variantId, q)}
+            />
+          )}
+          ListEmptyComponent={
+            <View style={{ alignItems: 'center', gap: Spacing.one, padding: Spacing.four }}>
+              <ThemedText type="smallBold">Point the camera at a barcode</ThemedText>
+              <ThemedText type="small" themeColor="textSecondary" style={{ textAlign: 'center' }}>
+                Items without one? Switch to{' '}
+                <ThemedText type="small" themeColor="primary" onPress={() => changeMode('browse')}>
+                  Browse
+                </ThemedText>
+                .
+              </ThemedText>
+            </View>
+          }
+        />
+      )}
 
       {cart.lines.length > 0 && (
-        <View
-          style={[
-            styles.footer,
-            { backgroundColor: theme.backgroundElement, borderColor: theme.border },
-            // The tab bar sits below on native; on web leave room for the home indicator.
-            Platform.OS === 'web' && { paddingBottom: Spacing.three + insets.bottom },
-          ]}>
-          <View style={styles.footerTotals}>
-            <ThemedText type="small" themeColor="textSecondary">
-              {cart.itemCount} item{cart.itemCount === 1 ? '' : 's'}
-            </ThemedText>
-            <ThemedText type="subtitle">{formatCurrency(cart.subtotal)}</ThemedText>
-          </View>
-          <Button title="Charge" style={styles.charge} onPress={() => router.push('/checkout')} />
+        <View style={{ position: 'absolute', left: Spacing.three, right: Spacing.three, bottom: BOTTOM_OFFSET }}>
+          <CartBar
+            itemCount={cart.itemCount}
+            total={formatCurrency(cart.subtotal)}
+            onOpenCart={() => router.push('/cart')}
+            onCharge={() => router.push('/checkout')}
+          />
         </View>
       )}
+
+      <VariantSheet
+        product={pickVariantOf}
+        formatCurrency={formatCurrency}
+        onClose={() => setPickVariantOf(null)}
+        onPick={(variantId) => {
+          if (pickVariantOf) add(pickVariantOf, variantId);
+          setPickVariantOf(null);
+        }}
+      />
     </View>
   );
 }
@@ -202,89 +295,33 @@ function StatusPill({ status }: { status: ScanStatus }) {
     status.kind === 'looking'
       ? `Looking up ${status.code}…`
       : status.kind === 'added'
-        ? `✓ Added ${status.name}`
+        ? `Added ${status.name}`
         : status.kind === 'error'
           ? status.message
-          : 'Point the camera at a barcode';
+          : 'Hold steady over the barcode';
   const background =
-    status.kind === 'added' ? theme.success : status.kind === 'error' ? theme.danger : 'rgba(0,0,0,0.55)';
+    status.kind === 'added' ? theme.success : status.kind === 'error' ? theme.danger : 'rgba(15, 23, 42, 0.6)';
 
   return (
-    <View style={[styles.pill, { backgroundColor: background }]} accessibilityLiveRegion="polite">
-      <ThemedText type="smallBold" style={styles.pillText} numberOfLines={2}>
+    <View
+      accessibilityLiveRegion="polite"
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        maxWidth: '100%',
+        paddingHorizontal: Spacing.three,
+        paddingVertical: 6,
+        borderRadius: Radius.lg,
+        borderCurve: 'continuous',
+        backgroundColor: background,
+      }}>
+      {status.kind === 'added' && <Icon name="check" size={15} color="#FFFFFF" />}
+      {status.kind === 'looking' && <ActivityIndicator size="small" color="#FFFFFF" />}
+      <ThemedText type="smallBold" numberOfLines={2} style={{ color: '#FFFFFF', textAlign: 'center', flexShrink: 1 }}>
         {text}
       </ThemedText>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-  },
-  scannerWrap: {
-    padding: Spacing.three,
-    paddingBottom: Spacing.two,
-  },
-  list: {
-    flex: 1,
-  },
-  emptyContainer: {
-    flexGrow: 1,
-  },
-  empty: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Spacing.two,
-    padding: Spacing.four,
-  },
-  emptyText: {
-    textAlign: 'center',
-    marginBottom: Spacing.two,
-  },
-  picker: {
-    marginHorizontal: Spacing.three,
-    marginBottom: Spacing.two,
-    padding: Spacing.three,
-    gap: Spacing.three,
-    borderRadius: Radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  pickerOptions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.two,
-  },
-  option: {
-    minWidth: 72,
-    alignItems: 'center',
-    paddingVertical: Spacing.two,
-    paddingHorizontal: Spacing.three,
-    borderWidth: 1,
-    borderRadius: Radius.md,
-  },
-  footer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.three,
-    padding: Spacing.three,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  footerTotals: {
-    flex: 1,
-  },
-  charge: {
-    minWidth: 140,
-  },
-  pill: {
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.one,
-    borderRadius: 999,
-    maxWidth: '100%',
-  },
-  pillText: {
-    color: '#FFFFFF',
-    textAlign: 'center',
-  },
-});

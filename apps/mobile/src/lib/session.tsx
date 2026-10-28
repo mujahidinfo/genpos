@@ -57,6 +57,8 @@ type SessionContextValue = State & {
   createBusiness: (input: CreateBusinessInput) => Promise<void>;
   switchShop: (shopId: string) => Promise<void>;
   refreshWorkspaces: () => Promise<void>;
+  /** Replace the signed-in user (e.g. after a new profile photo) and keep it saved. */
+  updateUser: (patch: Partial<AuthUser>) => void;
 };
 
 const SessionContext = createContext<SessionContextValue | null>(null);
@@ -231,6 +233,13 @@ export function SessionProvider({ children }: PropsWithChildren) {
       // Cached data belongs to the previous branch.
       queryClient.clear();
       enter(state.user!, state.workspaces, shopId);
+    },
+
+    updateUser: (patch) => {
+      if (!state.user) return;
+      const user = { ...state.user, ...patch };
+      void secureStorage.set(KEYS.user, JSON.stringify(user));
+      setState((s) => ({ ...s, user }));
     },
 
     refreshWorkspaces: async () => {

@@ -50,3 +50,31 @@ export const totalStock = (variants: { stock: number }[]) =>
 
 export const isLowStock = (variants: { stock: number; lowStock: number }[]) =>
   variants.some((v) => v.stock <= v.lowStock);
+
+/** "Today", "Yesterday" or "Mon, 27 Oct" — for headings that group a list by day. */
+export function formatDayLabel(iso: string) {
+  const date = new Date(iso);
+  const today = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(today.getDate() - 1);
+  if (date.toDateString() === today.toDateString()) return 'Today';
+  if (date.toDateString() === yesterday.toDateString()) return 'Yesterday';
+  return date.toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' });
+}
+
+/** "Due today", "Due in 3 days", "2 days overdue" from a day count (negative = overdue). */
+export function dueLabel(daysUntil: number) {
+  if (daysUntil === 0) return 'Due today';
+  if (daysUntil === 1) return 'Due tomorrow';
+  if (daysUntil > 1) return `Due in ${daysUntil} days`;
+  const late = -daysUntil;
+  return `${late} day${late === 1 ? '' : 's'} overdue`;
+}
+
+/** Local noon on the given offset from today, as ISO — noon so the date never shifts across time zones. */
+export function dayISO(offsetDays = 0) {
+  const d = new Date();
+  d.setDate(d.getDate() + offsetDays);
+  d.setHours(12, 0, 0, 0);
+  return d.toISOString();
+}

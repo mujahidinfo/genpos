@@ -1,6 +1,7 @@
 import * as Haptics from 'expo-haptics';
 import { Pressable, StyleSheet, View } from 'react-native';
 
+import { ProductThumb } from '@/components/product-thumb';
 import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
@@ -32,6 +33,7 @@ export function CartRow({
         styles.row,
         { backgroundColor: highlighted ? `${theme.primary}14` : theme.backgroundElement },
       ]}>
+      <ProductThumb name={line.name} imageUrl={line.imageUrl} size={44} radius={10} />
       <View style={styles.main}>
         <ThemedText numberOfLines={2}>{line.name}</ThemedText>
         <ThemedText type="small" themeColor="textSecondary" numberOfLines={1}>

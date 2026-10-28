@@ -42,6 +42,9 @@ function MemberForm({ member }: { member?: Member }) {
   const [role, setRole] = useState<Role>(member?.role ?? 'CASHIER');
   const [shopId, setShopId] = useState<string | null>(member?.shopId ?? null);
   const [isActive, setIsActive] = useState(member?.isActive ?? true);
+  const currentPay = member?.employee?.isActive ? member.employee : null;
+  const [salary, setSalary] = useState(currentPay ? String(currentPay.salary) : '');
+  const [payDay, setPayDay] = useState(String(currentPay?.payDay ?? 1));
   const [error, setError] = useState<string | null>(null);
 
   const branches = workspaces.find((w) => w.id === active.businessId)?.shops ?? [];
@@ -49,13 +52,24 @@ function MemberForm({ member }: { member?: Member }) {
   const roles = active.role === 'OWNER' ? ROLES : ROLES.filter((r) => r !== 'OWNER');
   const isSelf = member?.user.id === me.id;
   const saving = addMember.isPending || updateMember.isPending;
-  const valid = member ? true : name.trim().length > 0 && /^\S+@\S+\.\S+$/.test(email.trim());
+  const salaryNum = Number(salary.replace(/,/g, '')) || 0;
+  const dayNum = Number(payDay);
+  const payOk = salaryNum === 0 || (Number.isInteger(dayNum) && dayNum >= 1 && dayNum <= 28);
+  const valid = payOk && (member ? true : name.trim().length > 0 && /^\S+@\S+\.\S+$/.test(email.trim()));
 
   const save = async () => {
     setError(null);
     try {
       if (member) {
-        await updateMember.mutateAsync({ id: member.id, role, shopId, isActive });
+        await updateMember.mutateAsync({
+          id: member.id,
+          role,
+          shopId,
+          isActive,
+          // Clearing the salary takes them off payroll.
+          ...((currentPay || salaryNum > 0) && { salary: salaryNum > 0 ? salaryNum : null }),
+          ...(salaryNum > 0 && { payDay: dayNum }),
+        });
       } else {
         await addMember.mutateAsync({
           name: name.trim(),
@@ -63,6 +77,7 @@ function MemberForm({ member }: { member?: Member }) {
           password: password || undefined,
           role,
           shopId: shopId ?? undefined,
+          ...(salaryNum > 0 && { salary: salaryNum, payDay: dayNum }),
         });
       }
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -119,6 +134,29 @@ function MemberForm({ member }: { member?: Member }) {
             ))}
           </ChipGroup>
         )}
+
+        <View style={{ gap: Spacing.three }}>
+          <TextField
+            label="Monthly salary (optional)"
+            value={salary}
+            onChangeText={setSalary}
+            keyboardType="decimal-pad"
+            placeholder="Leave empty if not on payroll"
+          />
+          {salaryNum > 0 && (
+            <TextField
+              label="Paid on day of the month (1–28)"
+              value={payDay}
+              onChangeText={(t) => setPayDay(t.replace(/\D/g, '').slice(0, 2))}
+              keyboardType="number-pad"
+            />
+          )}
+          {salaryNum > 0 && (
+            <ThemedText type="caption" themeColor="textSecondary">
+              They’ll appear under Salaries each month, ready to pay in one tap.
+            </ThemedText>
+          )}
+        </View>
 
         {member && !isSelf && (
           <View style={styles.switchRow}>

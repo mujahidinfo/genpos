@@ -1,7 +1,7 @@
 import * as Haptics from 'expo-haptics';
 import { router, useIsFocused, useLocalSearchParams } from 'expo-router';
 import { useRef, useState, type ComponentProps } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Switch, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
@@ -11,13 +11,16 @@ import {
   useReorderSuggestions,
   useSuppliers,
 } from '@/api/queries';
-import type { Product } from '@/api/types';
+import type { PaymentMethod, Product } from '@/api/types';
 import { BarcodeScanner } from '@/components/barcode-scanner';
 import { Button } from '@/components/button';
-import { Card } from '@/components/card';
-import { Chip, ChipGroup, Segmented } from '@/components/choice';
-import { HeaderButton } from '@/components/header-button';
+import { Chip, Segmented } from '@/components/choice';
+import { Icon } from '@/components/icon';
+import { IconTile, TINT } from '@/components/icon-tile';
+import { Panel } from '@/components/panel';
+import { ProductThumb } from '@/components/product-thumb';
 import { QueryState } from '@/components/query-state';
+import { SearchPill } from '@/components/sell/search-pill';
 import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing } from '@/constants/theme';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
@@ -29,13 +32,25 @@ type Line = {
   variantId: string;
   productId: string;
   name: string;
+  imageUrl?: string | null;
+  /** Stock in this branch before the delivery, when known. */
+  stock?: number;
   quantity: string;
   unitCost: string;
 };
 
 type Payment = 'full' | 'later' | 'part';
 
+type Receipt = { items: number; units: number; total: number; paid: number; supplierId: string | null };
+
+const METHODS: { value: PaymentMethod; label: string }[] = [
+  { value: 'CASH', label: 'Cash' },
+  { value: 'MOBILE_MONEY', label: 'bKash / Mobile' },
+  { value: 'BANK_TRANSFER', label: 'Bank' },
+];
+
 const toNumber = (text: string) => Number(text.replace(/,/g, ''));
+const round2 = (n: number) => Math.round(n * 100) / 100;
 
 /**
  * `/receive-stock` — receive a delivery. `?supplierId=` preselects the
@@ -63,6 +78,7 @@ export default function ReceiveStockScreen() {
         variantId: i.variantId,
         productId: i.productId,
         name: i.name,
+        stock: i.stock,
         quantity: String(i.suggestedQuantity),
         unitCost: i.unitCost ? String(i.unitCost) : '',
       }))}
@@ -72,8 +88,9 @@ export default function ReceiveStockScreen() {
 }
 
 /**
- * Receive a delivery into the active branch: scan or search each item, set the
- * quantity and what it cost, and record how much the supplier was paid.
+ * Receive a delivery into the active branch:
+ * pick the supplier, scan or search each item, set quantity and cost, say how
+ * much was paid, and confirm.
  */
 function ReceiveStockForm({
   initialSupplierId,
@@ -100,34 +117,40 @@ function ReceiveStockForm({
   const [notFound, setNotFound] = useState<string | null>(null);
   const [payment, setPayment] = useState<Payment>('full');
   const [partAmount, setPartAmount] = useState('');
+  const [method, setMethod] = useState<PaymentMethod>('CASH');
+  const [updateCost, setUpdateCost] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [receipt, setReceipt] = useState<Receipt | null>(null);
   const busy = useRef(false);
 
   const debounced = useDebouncedValue(search.trim(), 250);
   const results = useProducts(debounced);
   const matches = debounced ? (results.data?.pages[0]?.items.slice(0, 6) ?? []) : [];
 
-  const total = lines.reduce((sum, l) => sum + (toNumber(l.quantity) || 0) * (toNumber(l.unitCost) || 0), 0);
+  const total = round2(lines.reduce((sum, l) => sum + (toNumber(l.quantity) || 0) * (toNumber(l.unitCost) || 0), 0));
+  const units = lines.reduce((sum, l) => sum + (toNumber(l.quantity) || 0), 0);
   const linesValid =
     lines.length > 0 &&
     lines.every((l) => Number.isInteger(toNumber(l.quantity)) && toNumber(l.quantity) > 0 && toNumber(l.unitCost) >= 0);
   const paidAmount = !supplierId ? 0 : payment === 'full' ? total : payment === 'later' ? 0 : toNumber(partAmount) || 0;
   const paymentValid = payment !== 'part' || (paidAmount >= 0 && paidAmount <= total);
+  const owed = round2(Math.max(total - paidAmount, 0));
+  const supplier = suppliers.data?.find((s) => s.id === supplierId);
 
   const addVariant = (product: Product, variantId: string) => {
     const variant = product.variants.find((v) => v.id === variantId)!;
     setLines((current) => {
       const existing = current.find((l) => l.variantId === variantId);
       if (existing) {
-        return current.map((l) =>
-          l === existing ? { ...l, quantity: String((toNumber(l.quantity) || 0) + 1) } : l,
-        );
+        return current.map((l) => (l === existing ? { ...l, quantity: String((toNumber(l.quantity) || 0) + 1) } : l));
       }
       return [
         {
           variantId,
           productId: product.id,
           name: variant.isDefault ? product.name : `${product.name} (${variant.name})`,
+          imageUrl: product.imageUrl,
+          stock: variant.stock,
           quantity: '1',
           // Start from the last known cost; usually unchanged.
           unitCost: String(product.costPrice || ''),
@@ -140,8 +163,7 @@ function ReceiveStockForm({
 
   const addProduct = (product: Product, matchedVariantId?: string | null) => {
     setNotFound(null);
-    const variantId =
-      matchedVariantId ?? (product.variants.length === 1 ? product.variants[0].id : null);
+    const variantId = matchedVariantId ?? (product.variants.length === 1 ? product.variants[0].id : null);
     if (variantId) addVariant(product, variantId);
     else setPickVariantOf(product);
   };
@@ -166,8 +188,15 @@ function ReceiveStockForm({
   const updateLine = (variantId: string, patch: Partial<Line>) =>
     setLines((current) => current.map((l) => (l.variantId === variantId ? { ...l, ...patch } : l)));
 
+  const bump = (l: Line, by: number) => {
+    const next = Math.max((toNumber(l.quantity) || 0) + by, 1);
+    updateLine(l.variantId, { quantity: String(next) });
+    if (process.env.EXPO_OS === 'ios') void Haptics.selectionAsync();
+  };
+
   const save = async () => {
     setError(null);
+    const paid = round2(paidAmount);
     try {
       await createPurchase.mutateAsync({
         supplierId: supplierId ?? undefined,
@@ -177,149 +206,268 @@ function ReceiveStockForm({
           quantity: toNumber(l.quantity),
           unitCost: toNumber(l.unitCost) || 0,
         })),
-        paidAmount: Math.round(paidAmount * 100) / 100,
-        paymentMethod: 'CASH',
+        paidAmount: paid,
+        paymentMethod: method,
+        updateCostPrice: updateCost,
       });
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      router.back();
+      setReceipt({ items: lines.length, units, total, paid, supplierId });
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not save the delivery.');
     }
   };
 
-  return (
-    <KeyboardAvoidingView
-      style={[styles.flex, { backgroundColor: theme.background }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        {reorderCount !== undefined && (
-          <ThemedText type="small" themeColor="textSecondary">
-            {reorderCount === 0
-              ? 'Nothing is running low right now.'
-              : `${reorderCount} item${reorderCount === 1 ? '' : 's'} running low. Check quantities and costs, then receive when the delivery arrives.`}
+  const receiveMore = () => {
+    setReceipt(null);
+    setLines([]);
+    setSearch('');
+    setPayment('full');
+    setPartAmount('');
+    setScanning(true);
+  };
+
+  if (receipt) {
+    const receiptSupplier = suppliers.data?.find((s) => s.id === receipt.supplierId);
+    return (
+      <View style={{ flex: 1, backgroundColor: theme.background, padding: Spacing.four, gap: Spacing.four, justifyContent: 'center' }}>
+        <View style={{ alignItems: 'center', gap: Spacing.two }}>
+          <IconTile name="tick" tint={TINT.emerald} size={72} />
+          <ThemedText type="subtitle">Stock received</ThemedText>
+          <ThemedText themeColor="textSecondary" style={{ textAlign: 'center' }}>
+            {receipt.units} unit{receipt.units === 1 ? '' : 's'} of {receipt.items} product{receipt.items === 1 ? '' : 's'} added
+            to your shelves.
+          </ThemedText>
+        </View>
+        <Panel>
+          <SummaryLine label="Delivery total" value={formatCurrency(receipt.total)} bold />
+          {receiptSupplier && <SummaryLine label="From" value={receiptSupplier.name} />}
+          {receipt.supplierId && <SummaryLine label="Paid now" value={formatCurrency(receipt.paid)} />}
+          {receipt.supplierId && receipt.total - receipt.paid > 0.005 && (
+            <SummaryLine label="Still owed" value={formatCurrency(receipt.total - receipt.paid)} danger />
+          )}
+        </Panel>
+        {receipt.supplierId && receipt.paid > 0 && (
+          <ThemedText type="caption" themeColor="textSecondary" style={{ textAlign: 'center' }}>
+            The payment is also recorded in your Expenses.
           </ThemedText>
         )}
-        <ChipGroup label="From supplier">
-          <Chip label="No supplier" selected={supplierId === null} onPress={() => setSupplierId(null)} />
-          {(suppliers.data ?? []).map((s) => (
-            <Chip key={s.id} label={s.name} selected={supplierId === s.id} onPress={() => setSupplierId(s.id)} />
-          ))}
-          <Chip label="+ New" selected={false} onPress={() => router.push('/supplier-form')} />
-        </ChipGroup>
-
-        {scanning ? (
-          <View style={styles.gap}>
-            <BarcodeScanner active={isFocused && !pickVariantOf} height={170} onScan={onScan} />
-            <HeaderButton title="Hide camera" onPress={() => setScanning(false)} />
-          </View>
-        ) : (
-          <Button title="Scan items" variant="secondary" onPress={() => setScanning(true)} />
-        )}
-
-        {notFound && (
-          <Card>
-            <ThemedText type="smallBold">{notFound} isn’t in your products</ThemedText>
+        <View style={{ gap: Spacing.two }}>
+          <Button title="Receive more" onPress={receiveMore} />
+          {receipt.supplierId && (
             <Button
-              title="Add it as a new product"
+              title="View supplier"
               variant="secondary"
               onPress={() => {
-                setNotFound(null);
-                router.push({ pathname: '/new-product', params: { barcode: notFound } });
+                router.back();
+                router.push({ pathname: '/more/supplier/[id]', params: { id: receipt.supplierId! } });
               }}
             />
-          </Card>
+          )}
+          <Button title="Done" variant="secondary" onPress={() => router.back()} />
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: theme.background }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <ScrollView contentContainerStyle={{ padding: Spacing.three, gap: Spacing.three }} keyboardShouldPersistTaps="handled">
+        {reorderCount !== undefined && (
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: Spacing.three,
+              padding: Spacing.three,
+              borderRadius: Radius.lg + 4,
+              borderCurve: 'continuous',
+              backgroundColor: `${TINT.amber}1F`,
+            }}>
+            <IconTile name="reorder" tint={TINT.amber} size={40} />
+            <ThemedText type="small" style={{ flex: 1 }}>
+              {reorderCount === 0
+                ? 'Nothing is running low right now.'
+                : `${reorderCount} item${reorderCount === 1 ? '' : 's'} running low. Check the quantities, then confirm when the delivery arrives.`}
+            </ThemedText>
+          </View>
         )}
 
-        <TextInput
-          value={search}
-          onChangeText={setSearch}
-          placeholder="…or search products by name"
-          placeholderTextColor={theme.textSecondary}
-          style={[styles.search, { color: theme.text, backgroundColor: theme.backgroundElement, borderColor: theme.border }]}
-        />
-        {matches.length > 0 && (
-          <Card>
-            {matches.map((p) => (
-              <Pressable
-                key={p.id}
-                accessibilityRole="button"
-                onPress={() => {
-                  addProduct(p);
-                  setSearch('');
-                }}
-                style={({ pressed }) => [styles.match, pressed && { backgroundColor: theme.backgroundSelected }]}>
-                <ThemedText style={styles.flex} numberOfLines={1}>
-                  {p.name}
-                </ThemedText>
-                <ThemedText type="smallBold" themeColor="primary">
-                  Add
-                </ThemedText>
-              </Pressable>
+        {/* 1 · Supplier */}
+        <View style={{ gap: Spacing.two }}>
+          <StepLabel n={1}>Who delivered?</StepLabel>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: Spacing.two }}>
+            <Chip label="No supplier" selected={supplierId === null} onPress={() => setSupplierId(null)} />
+            {(suppliers.data ?? []).map((s) => (
+              <Chip key={s.id} label={s.name} selected={supplierId === s.id} onPress={() => setSupplierId(s.id)} />
             ))}
-          </Card>
+            <Chip label="+ New" selected={false} onPress={() => router.push('/supplier-form')} />
+          </ScrollView>
+          {supplier && supplier.due > 0 && (
+            <ThemedText type="caption" themeColor="textSecondary">
+              You already owe {supplier.name} {formatCurrency(supplier.due)}.
+            </ThemedText>
+          )}
+        </View>
+
+        {/* 2 · Items */}
+        <View style={{ gap: Spacing.two }}>
+          <StepLabel n={2}>What arrived?</StepLabel>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.two }}>
+            <SearchPill value={search} onChangeText={setSearch} placeholder="Search by name or SKU" />
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ selected: scanning }}
+              accessibilityLabel={scanning ? 'Hide camera' : 'Scan barcodes'}
+              onPress={() => setScanning((v) => !v)}
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: Radius.md,
+                borderCurve: 'continuous',
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: scanning ? theme.primary : theme.backgroundElement,
+                boxShadow: '0 1px 2px rgba(15, 23, 42, 0.06)',
+              }}>
+              <Icon name="scan" size={22} color={scanning ? theme.onPrimary : theme.text} />
+            </Pressable>
+          </View>
+
+          {scanning && <BarcodeScanner active={isFocused && !pickVariantOf} height={170} onScan={onScan} />}
+
+          {notFound && (
+            <Panel>
+              <ThemedText type="smallBold">{notFound} isn’t in your products</ThemedText>
+              <Button
+                title="Add it as a new product"
+                variant="secondary"
+                onPress={() => {
+                  setNotFound(null);
+                  router.push({ pathname: '/new-product', params: { barcode: notFound } });
+                }}
+              />
+            </Panel>
+          )}
+
+          {matches.length > 0 && (
+            <Panel style={{ paddingVertical: Spacing.two }}>
+              {matches.map((p) => (
+                <Pressable
+                  key={p.id}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Add ${p.name}`}
+                  onPress={() => {
+                    addProduct(p);
+                    setSearch('');
+                  }}
+                  style={({ pressed }) => ({
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: Spacing.three,
+                    paddingVertical: Spacing.one,
+                    opacity: pressed ? 0.6 : 1,
+                  })}>
+                  <ProductThumb name={p.name} imageUrl={p.imageUrl} size={40} radius={10} />
+                  <ThemedText style={{ flex: 1 }} numberOfLines={1}>
+                    {p.name}
+                  </ThemedText>
+                  <ThemedText type="smallBold" themeColor="primary">
+                    Add
+                  </ThemedText>
+                </Pressable>
+              ))}
+            </Panel>
+          )}
+
+          {pickVariantOf && (
+            <Panel icon="box" tint={TINT.indigo} title={`Which ${pickVariantOf.name}?`}>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two }}>
+                {pickVariantOf.variants.map((v) => (
+                  <Chip
+                    key={v.id}
+                    label={v.name}
+                    selected={false}
+                    onPress={() => {
+                      addVariant(pickVariantOf, v.id);
+                      setPickVariantOf(null);
+                    }}
+                  />
+                ))}
+              </View>
+            </Panel>
+          )}
+        </View>
+
+        {lines.length === 0 && !pickVariantOf && matches.length === 0 && (
+          <View style={{ alignItems: 'center', gap: Spacing.two, paddingVertical: Spacing.four }}>
+            <Icon name="box" size={34} color={theme.textSecondary} />
+            <ThemedText type="small" themeColor="textSecondary" style={{ textAlign: 'center' }}>
+              Scan a barcode or search to add what arrived.
+            </ThemedText>
+          </View>
         )}
 
-        {pickVariantOf && (
-          <Card title={`Which ${pickVariantOf.name}?`}>
-            <ChipGroup>
-              {pickVariantOf.variants.map((v) => (
-                <Chip
-                  key={v.id}
-                  label={v.name}
-                  selected={false}
-                  onPress={() => {
-                    addVariant(pickVariantOf, v.id);
-                    setPickVariantOf(null);
-                  }}
-                />
-              ))}
-            </ChipGroup>
-          </Card>
-        )}
+        {lines.map((l) => (
+          <LineCard
+            key={l.variantId}
+            line={l}
+            lineTotal={formatCurrency((toNumber(l.quantity) || 0) * (toNumber(l.unitCost) || 0))}
+            onQuantity={(quantity) => updateLine(l.variantId, { quantity: quantity.replace(/\D/g, '') })}
+            onCost={(unitCost) => updateLine(l.variantId, { unitCost })}
+            onBump={(by) => bump(l, by)}
+            onRemove={() => setLines((current) => current.filter((x) => x !== l))}
+          />
+        ))}
 
         {lines.length > 0 && (
-          <Card title={`${lines.length} item${lines.length === 1 ? '' : 's'}`}>
-            {lines.map((l) => (
-              <View key={l.variantId} style={[styles.line, { borderColor: theme.border }]}>
-                <View style={styles.lineHeader}>
-                  <ThemedText style={styles.flex} numberOfLines={2}>
-                    {l.name}
-                  </ThemedText>
-                  <HeaderButton
-                    title="Remove"
-                    tone="danger"
-                    onPress={() => setLines((current) => current.filter((x) => x !== l))}
-                  />
-                </View>
-                <View style={styles.lineInputs}>
-                  <LabeledInput
-                    label="Qty"
-                    value={l.quantity}
-                    onChangeText={(quantity) => updateLine(l.variantId, { quantity })}
-                    keyboardType="number-pad"
-                  />
-                  <LabeledInput
-                    label="Cost each"
-                    value={l.unitCost}
-                    onChangeText={(unitCost) => updateLine(l.variantId, { unitCost })}
-                    keyboardType="decimal-pad"
-                  />
-                  <View style={styles.lineTotal}>
-                    <ThemedText type="caption" themeColor="textSecondary">
-                      Total
-                    </ThemedText>
-                    <ThemedText type="smallBold">
-                      {formatCurrency((toNumber(l.quantity) || 0) * (toNumber(l.unitCost) || 0))}
-                    </ThemedText>
-                  </View>
-                </View>
-              </View>
-            ))}
-          </Card>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.three, paddingHorizontal: Spacing.one }}>
+            <View style={{ flex: 1 }}>
+              <ThemedText type="small">Update cost prices</ThemedText>
+              <ThemedText type="caption" themeColor="textSecondary">
+                Keep each product’s cost in step with what you just paid.
+              </ThemedText>
+            </View>
+            <Switch value={updateCost} onValueChange={setUpdateCost} trackColor={{ true: theme.primary }} accessibilityLabel="Update cost prices" />
+          </View>
+        )}
+
+        {error && (
+          <ThemedText type="small" themeColor="danger" accessibilityLiveRegion="polite">
+            {error}
+          </ThemedText>
+        )}
+      </ScrollView>
+
+      {/* 3 · Pay + confirm */}
+      <View
+        style={{
+          gap: Spacing.two + 2,
+          padding: Spacing.three,
+          paddingBottom: Spacing.three + Math.max(insets.bottom, Platform.OS === 'android' ? 16 : 0),
+          borderTopWidth: 1,
+          borderColor: theme.border,
+          backgroundColor: theme.backgroundElement,
+        }}>
+        {lines.length > 0 && (
+          <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' }}>
+            <View>
+              <ThemedText type="caption" themeColor="textSecondary">
+                {lines.length} item{lines.length === 1 ? '' : 's'} · {units} unit{units === 1 ? '' : 's'}
+              </ThemedText>
+              <ThemedText style={{ fontSize: 24, lineHeight: 30, fontWeight: 700, fontVariant: ['tabular-nums'] }}>
+                {formatCurrency(total)}
+              </ThemedText>
+            </View>
+            {supplierId && owed > 0 && (
+              <ThemedText type="smallBold" themeColor="danger">
+                {formatCurrency(owed)} owed
+              </ThemedText>
+            )}
+          </View>
         )}
 
         {lines.length > 0 && supplierId && (
-          <Card title="Payment to supplier">
+          <>
             <Segmented
               options={[
                 { value: 'full', label: 'Paid in full' },
@@ -332,32 +480,12 @@ function ReceiveStockForm({
             {payment === 'part' && (
               <LabeledInput label="Amount paid now" value={partAmount} onChangeText={setPartAmount} keyboardType="decimal-pad" />
             )}
-            {payment !== 'full' && (
-              <ThemedText type="small" themeColor="textSecondary">
-                {formatCurrency(Math.max(total - paidAmount, 0))} will be added to what you owe.
-              </ThemedText>
-            )}
-          </Card>
+            {paidAmount > 0 && <Segmented options={METHODS} value={method} onChange={setMethod} />}
+          </>
         )}
 
-        {error && (
-          <ThemedText type="small" themeColor="danger" accessibilityLiveRegion="polite">
-            {error}
-          </ThemedText>
-        )}
-      </ScrollView>
-
-      <View
-        style={[
-          styles.footer,
-          {
-            backgroundColor: theme.backgroundElement,
-            borderColor: theme.border,
-            paddingBottom: Spacing.three + Math.max(insets.bottom, Platform.OS === 'android' ? 16 : 0),
-          },
-        ]}>
         <Button
-          title={lines.length ? `Receive ${formatCurrency(total)}` : 'Scan or search items to receive'}
+          title={lines.length ? 'Confirm delivery' : 'Add items to receive'}
           onPress={save}
           loading={createPurchase.isPending}
           disabled={!linesValid || !paymentValid}
@@ -367,13 +495,136 @@ function ReceiveStockForm({
   );
 }
 
-function LabeledInput({
-  label,
-  ...props
-}: { label: string } & ComponentProps<typeof TextInput>) {
+function StepLabel({ n, children }: { n: number; children: string }) {
   const theme = useTheme();
   return (
-    <View style={styles.flex}>
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.two }}>
+      <View
+        style={{
+          width: 22,
+          height: 22,
+          borderRadius: 11,
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: `${theme.primary}1A`,
+        }}>
+        <ThemedText type="caption" themeColor="primary" style={{ fontWeight: 700 }}>
+          {n}
+        </ThemedText>
+      </View>
+      <ThemedText type="smallBold">{children}</ThemedText>
+    </View>
+  );
+}
+
+function SummaryLine({ label, value, bold, danger }: { label: string; value: string; bold?: boolean; danger?: boolean }) {
+  return (
+    <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: Spacing.three }}>
+      <ThemedText type={bold ? 'smallBold' : 'small'} themeColor={bold ? 'text' : 'textSecondary'}>
+        {label}
+      </ThemedText>
+      <ThemedText type="smallBold" themeColor={danger ? 'danger' : 'text'} style={{ fontVariant: ['tabular-nums'], flexShrink: 1, textAlign: 'right' }}>
+        {value}
+      </ThemedText>
+    </View>
+  );
+}
+
+/** One received item: photo, name, quantity stepper, cost each and the line total. */
+function LineCard({
+  line,
+  lineTotal,
+  onQuantity,
+  onCost,
+  onBump,
+  onRemove,
+}: {
+  line: Line;
+  lineTotal: string;
+  onQuantity: (text: string) => void;
+  onCost: (text: string) => void;
+  onBump: (by: number) => void;
+  onRemove: () => void;
+}) {
+  const theme = useTheme();
+  const qty = toNumber(line.quantity) || 0;
+  return (
+    <Panel style={{ gap: Spacing.two + 2 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.three }}>
+        <ProductThumb name={line.name} imageUrl={line.imageUrl} size={48} radius={12} />
+        <View style={{ flex: 1, gap: 2 }}>
+          <ThemedText type="smallBold" numberOfLines={2}>
+            {line.name}
+          </ThemedText>
+          {line.stock !== undefined && (
+            <ThemedText type="caption" themeColor="textSecondary">
+              {line.stock} in stock → {line.stock + qty} after
+            </ThemedText>
+          )}
+        </View>
+        <Pressable accessibilityRole="button" accessibilityLabel={`Remove ${line.name}`} hitSlop={10} onPress={onRemove}>
+          <Icon name="close" size={18} color={theme.textSecondary} />
+        </Pressable>
+      </View>
+
+      <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: Spacing.three }}>
+        <View style={{ gap: 4 }}>
+          <ThemedText type="caption" themeColor="textSecondary">
+            Quantity
+          </ThemedText>
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              borderRadius: Radius.md,
+              borderCurve: 'continuous',
+              backgroundColor: theme.background,
+            }}>
+            <StepButton icon="minus" label="Less" onPress={() => onBump(-1)} />
+            <TextInput
+              value={line.quantity}
+              onChangeText={onQuantity}
+              keyboardType="number-pad"
+              selectTextOnFocus
+              accessibilityLabel={`Quantity of ${line.name}`}
+              style={{ width: 52, textAlign: 'center', fontSize: 17, fontWeight: 600, color: theme.text, paddingVertical: 10 }}
+            />
+            <StepButton icon="plus" label="More" onPress={() => onBump(1)} />
+          </View>
+        </View>
+        <View style={{ flex: 1 }}>
+          <LabeledInput label="Cost each" value={line.unitCost} onChangeText={onCost} keyboardType="decimal-pad" />
+        </View>
+        <View style={{ alignItems: 'flex-end', paddingBottom: 12, minWidth: 70 }}>
+          <ThemedText type="caption" themeColor="textSecondary">
+            Total
+          </ThemedText>
+          <ThemedText type="smallBold" style={{ fontVariant: ['tabular-nums'] }}>
+            {lineTotal}
+          </ThemedText>
+        </View>
+      </View>
+    </Panel>
+  );
+}
+
+function StepButton({ icon, label, onPress }: { icon: 'plus' | 'minus'; label: string; onPress: () => void }) {
+  const theme = useTheme();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      onPress={onPress}
+      style={({ pressed }) => ({ width: 40, height: 44, alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.5 : 1 })}>
+      <Icon name={icon} size={18} color={theme.primary} weight="semibold" />
+    </Pressable>
+  );
+}
+
+function LabeledInput({ label, ...props }: { label: string } & ComponentProps<typeof TextInput>) {
+  const theme = useTheme();
+  return (
+    <View style={{ gap: 4 }}>
       <ThemedText type="caption" themeColor="textSecondary">
         {label}
       </ThemedText>
@@ -381,67 +632,18 @@ function LabeledInput({
         selectTextOnFocus
         placeholder="0"
         placeholderTextColor={theme.textSecondary}
-        style={[styles.input, { color: theme.text, borderColor: theme.border, backgroundColor: theme.background }]}
+        accessibilityLabel={label}
+        style={{
+          minHeight: 44,
+          borderRadius: Radius.md,
+          borderCurve: 'continuous',
+          paddingHorizontal: Spacing.three,
+          fontSize: 16,
+          color: theme.text,
+          backgroundColor: theme.background,
+        }}
         {...props}
       />
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  flex: {
-    flex: 1,
-  },
-  content: {
-    padding: Spacing.three,
-    gap: Spacing.three,
-  },
-  gap: {
-    gap: Spacing.one,
-    alignItems: 'center',
-  },
-  search: {
-    minHeight: 48,
-    borderWidth: 1,
-    borderRadius: Radius.md,
-    paddingHorizontal: Spacing.three,
-    fontSize: 16,
-  },
-  match: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.two,
-    paddingVertical: Spacing.two,
-  },
-  line: {
-    gap: Spacing.two,
-    paddingVertical: Spacing.two,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  lineHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.two,
-  },
-  lineInputs: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: Spacing.three,
-  },
-  lineTotal: {
-    flex: 1,
-    alignItems: 'flex-end',
-    paddingBottom: Spacing.two,
-  },
-  input: {
-    minHeight: 44,
-    borderWidth: 1,
-    borderRadius: Radius.sm,
-    paddingHorizontal: Spacing.two,
-    fontSize: 16,
-  },
-  footer: {
-    padding: Spacing.three,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-});

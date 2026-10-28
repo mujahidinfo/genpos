@@ -40,12 +40,10 @@ export default function AppTabs() {
         <NativeTabs.Trigger.Icon sf={{ default: 'receipt', selected: 'receipt.fill' }} md="receipt_long" />
       </NativeTabs.Trigger>
 
-      <NativeTabs.Trigger name="account">
+      {/* Everything beyond the counter: stock, suppliers, expenses, staff. */}
+      <NativeTabs.Trigger name="more">
         <NativeTabs.Trigger.Label>More</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon
-          sf={{ default: 'person.crop.circle', selected: 'person.crop.circle.fill' }}
-          md="account_circle"
-        />
+        <NativeTabs.Trigger.Icon sf={{ default: 'ellipsis.circle', selected: 'ellipsis.circle.fill' }} md="more_horiz" />
       </NativeTabs.Trigger>
     </NativeTabs>
   );

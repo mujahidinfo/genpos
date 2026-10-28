@@ -184,7 +184,11 @@ export type Member = {
   shopId: string | null;
   user: { id: string; name: string; email: string; avatarUrl: string | null };
   shop: { id: string; name: string } | null;
+  /** Payroll entry — present when the person has a monthly salary. */
+  employee: { id: string; salary: number; salaryType: SalaryType; payDay: number; isActive: boolean } | null;
 };
+
+export type SalaryType = 'MONTHLY' | 'HOURLY' | 'WEEKLY' | 'ANNUALLY';
 
 // ─── Suppliers & purchases ───────────────────────────────────────────────────
 
@@ -248,6 +252,9 @@ export type ExpenseCategory = {
   _count?: { expenses: number };
 };
 
+/** How an expense got into the ledger. */
+export type ExpenseSource = 'MANUAL' | 'SALARY' | 'SUPPLIER_PAYMENT' | 'RECURRING';
+
 export type Expense = {
   id: string;
   title: string;
@@ -257,8 +264,80 @@ export type Expense = {
   paymentMethod: PaymentMethod;
   status: ExpenseStatus;
   notes: string | null;
+  source: ExpenseSource;
   category: ExpenseCategory;
+  employee?: { id: string; name: string; position: string } | null;
 };
+
+/** GET /finance/overview — money in and out for the last N days. */
+export type FinanceOverview = {
+  totalExpenses: number;
+  expenseCount: number;
+  totalIncome: number;
+  orderCount: number;
+  netProfit: number;
+  expensesByCategory: { categoryId: string; name: string; color: string; amount: number }[];
+  expensesBySource: { source: ExpenseSource; amount: number }[];
+};
+
+export type PayrollState = 'PAID' | 'DUE' | 'UPCOMING';
+
+export type PayrollItem = {
+  employeeId: string;
+  /** Set when the person also signs in to the app. */
+  membershipId: string | null;
+  name: string;
+  position: string;
+  phone: string | null;
+  salary: number;
+  salaryType: SalaryType;
+  payDay: number;
+  /** What this month's pay is (monthly equivalent of the salary). */
+  amount: number;
+  dueDate: string;
+  state: PayrollState;
+  paidAmount: number | null;
+  paidOn: string | null;
+  expenseId: string | null;
+};
+
+export type Payroll = {
+  month: string;
+  label: string;
+  items: PayrollItem[];
+  totals: { total: number; paid: number; outstanding: number; dueCount: number };
+};
+
+export type RecurringFrequency = 'WEEKLY' | 'MONTHLY';
+
+export type RecurringBill = {
+  id: string;
+  title: string;
+  amount: number;
+  categoryId: string;
+  paymentMethod: PaymentMethod;
+  frequency: RecurringFrequency;
+  nextDueDate: string;
+  isActive: boolean;
+  notes: string | null;
+  category: ExpenseCategory;
+  /** Negative = overdue. */
+  daysUntil: number;
+};
+
+/** Something to pay soon: a recurring bill or a salary. */
+export type UpcomingItem = {
+  kind: 'BILL' | 'SALARY';
+  /** Bill id, or employee id for a salary. */
+  id: string;
+  title: string;
+  subtitle: string;
+  amount: number;
+  dueDate: string;
+  daysUntil: number;
+};
+
+export type Upcoming = { items: UpcomingItem[]; total: number; overdueCount: number };
 
 /** GET /purchases/reorder — a low-stock item and where it was last bought. */
 export type ReorderSuggestion = {

@@ -1,12 +1,14 @@
-import { router, Stack } from 'expo-router';
+import { router } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, RefreshControl, View } from 'react-native';
 
-import { useAnalyticsOverview, useProducts } from '@/api/queries';
-import { Badge } from '@/components/badge';
-import { HeaderButton } from '@/components/header-button';
-import { ListRow, ListSeparator } from '@/components/list-row';
-import { ListSearch } from '@/components/list-search';
+import { useAnalyticsOverview, useCategories, useProducts } from '@/api/queries';
+import type { Product } from '@/api/types';
+import { Fab, FAB_CLEARANCE } from '@/components/fab';
+import { FilterBar } from '@/components/filter-bar';
+import { Icon } from '@/components/icon';
+import { IconTile, TINT } from '@/components/icon-tile';
+import { ProductThumb } from '@/components/product-thumb';
 import { QueryState } from '@/components/query-state';
 import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing } from '@/constants/theme';
@@ -16,76 +18,80 @@ import { isLowStock, totalStock, useFormatCurrency } from '@/lib/format';
 import { canEditCatalog } from '@/lib/roles';
 import { useActiveShop } from '@/lib/session';
 
+const CARD_SHADOW = '0 1px 2px rgba(15, 23, 42, 0.06), 0 4px 12px rgba(15, 23, 42, 0.03)';
+
 export default function ProductsScreen() {
   const theme = useTheme();
   const shop = useActiveShop();
   const formatCurrency = useFormatCurrency();
   const [search, setSearch] = useState('');
+  const [categoryId, setCategoryId] = useState<string | undefined>();
   const debouncedSearch = useDebouncedValue(search.trim());
-  const query = useProducts(debouncedSearch);
+  const categories = useCategories();
+  const query = useProducts(debouncedSearch, categoryId);
   const lowStockCount = useAnalyticsOverview(1).data?.lowStockCount ?? 0;
-  const showReorder = lowStockCount > 0 && canEditCatalog(shop.role) && !debouncedSearch;
+
+  const canAdd = canEditCatalog(shop.role);
+  const filtered = Boolean(debouncedSearch || categoryId);
+  const showReorder = lowStockCount > 0 && canAdd && !filtered;
 
   const products = query.data?.pages.flatMap((p) => p.items) ?? [];
 
   return (
-    <>
-      {canEditCatalog(shop.role) && (
-        <Stack.Screen
-          options={{
-            headerLeft: () => <HeaderButton title="Receive" onPress={() => router.push('/receive-stock')} />,
-            headerRight: () => <HeaderButton title="Add" onPress={() => router.push('/new-product')} />,
-          }}
-        />
-      )}
-      <ListSearch placeholder="Name, SKU or barcode" onChangeText={setSearch} />
+    <View style={{ flex: 1, backgroundColor: theme.background }}>
+      <FilterBar
+        search={search}
+        onSearch={setSearch}
+        placeholder="Name, SKU or barcode"
+        chips={[{ label: 'All' }, ...(categories.data ?? []).map((c) => ({ label: c.name, value: c.id }))]}
+        selected={categoryId}
+        onSelect={setCategoryId}
+      />
       <FlatList
         data={products}
         keyExtractor={(p) => p.id}
-        contentInsetAdjustmentBehavior="automatic"
-        contentContainerStyle={{ flexGrow: 1 }}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        contentContainerStyle={{
+          flexGrow: 1,
+          padding: Spacing.three,
+          paddingTop: Spacing.one,
+          // Room for the floating button so the last row is never hidden.
+          paddingBottom: canAdd ? FAB_CLEARANCE : Spacing.five,
+          gap: Spacing.two + 2,
+        }}
         ListHeaderComponent={
           showReorder ? (
             <Pressable
               accessibilityRole="button"
               onPress={() => router.push({ pathname: '/receive-stock', params: { reorder: '1' } })}
-              style={({ pressed }) => [
-                styles.banner,
-                { backgroundColor: `${theme.danger}14`, opacity: pressed ? 0.7 : 1 },
-              ]}>
-              <ThemedText type="smallBold" themeColor="danger" style={{ flex: 1 }}>
-                {lowStockCount} item{lowStockCount === 1 ? '' : 's'} running low
-              </ThemedText>
+              style={({ pressed }) => ({
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: Spacing.three,
+                padding: Spacing.three,
+                marginBottom: Spacing.one,
+                borderRadius: Radius.lg + 4,
+                borderCurve: 'continuous',
+                backgroundColor: `${TINT.rose}14`,
+                opacity: pressed ? 0.7 : 1,
+              })}>
+              <IconTile name="alert" tint={TINT.rose} size={40} />
+              <View style={{ flex: 1, gap: 2 }}>
+                <ThemedText type="smallBold" themeColor="danger">
+                  {lowStockCount} item{lowStockCount === 1 ? '' : 's'} running low
+                </ThemedText>
+                <ThemedText type="caption" themeColor="textSecondary">
+                  Restock before you run out
+                </ThemedText>
+              </View>
               <ThemedText type="smallBold" themeColor="primary">
                 Reorder ›
               </ThemedText>
             </Pressable>
           ) : undefined
         }
-        ItemSeparatorComponent={ListSeparator}
-        renderItem={({ item }) => {
-          const stock = totalStock(item.variants);
-          const hasVariants = item.variants.length > 0;
-          return (
-            <ListRow
-              href={{ pathname: '/products/[id]', params: { id: item.id } }}
-              title={item.name}
-              subtitle={[item.category?.name, item.sku].filter(Boolean).join(' · ') || undefined}
-              value={formatCurrency(item.price)}
-              meta={
-                // "Low" means at least one variant is at/below its alert level,
-                // so don't pair it with the product-wide total.
-                hasVariants && isLowStock(item.variants) ? (
-                  <Badge label={stock === 0 ? 'Out of stock' : 'Low stock'} tone="danger" />
-                ) : hasVariants ? (
-                  <ThemedText type="caption" themeColor="textSecondary">
-                    {stock} in stock
-                  </ThemedText>
-                ) : null
-              }
-            />
-          );
-        }}
+        renderItem={({ item }) => <ProductCard product={item} price={formatCurrency(item.price)} />}
         refreshControl={
           <RefreshControl
             refreshing={query.isRefetching && !query.isFetchingNextPage}
@@ -100,11 +106,13 @@ export default function ProductsScreen() {
             isLoading={query.isLoading}
             error={query.error}
             onRetry={query.refetch}
-            emptyTitle={debouncedSearch ? 'No matching products' : 'No products yet'}
+            emptyTitle={filtered ? 'No matching products' : 'No products yet'}
             emptyMessage={
-              debouncedSearch
-                ? `Nothing matches “${debouncedSearch}”.`
-                : 'Tap Add, or scan a new item on the Sell tab.'
+              filtered
+                ? 'Try a different search or category.'
+                : canAdd
+                  ? 'Tap + to put your first product on the shelf.'
+                  : undefined
             }
           />
         }
@@ -116,19 +124,62 @@ export default function ProductsScreen() {
           ) : undefined
         }
       />
-    </>
+
+      {canAdd && <Fab label="Add product" onPress={() => router.push('/new-product')} />}
+    </View>
   );
 }
 
-const styles = StyleSheet.create({
-  banner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.two,
-    margin: Spacing.three,
-    marginBottom: Spacing.two,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: 12,
-    borderRadius: Radius.md,
-  },
-});
+function ProductCard({ product, price }: { product: Product; price: string }) {
+  const theme = useTheme();
+  const hasVariants = product.variants.length > 0;
+  const stock = totalStock(product.variants);
+  const out = hasVariants && stock === 0;
+  const low = hasVariants && isLowStock(product.variants);
+  const stockColor = out || low ? theme.danger : theme.success;
+  const subtitle = [product.category?.name, product.sku].filter(Boolean).join(' · ');
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${product.name}, ${price}`}
+      onPress={() => router.push({ pathname: '/products/[id]', params: { id: product.id } })}
+      style={({ pressed }) => ({
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: Spacing.three,
+        padding: Spacing.two + 2,
+        borderRadius: Radius.lg + 4,
+        borderCurve: 'continuous',
+        backgroundColor: theme.backgroundElement,
+        boxShadow: CARD_SHADOW,
+        transform: [{ scale: pressed ? 0.98 : 1 }],
+      })}>
+      <ProductThumb name={product.name} imageUrl={product.imageUrl} size={56} radius={14} />
+      <View style={{ flex: 1, gap: 3 }}>
+        <ThemedText type="smallBold" style={{ fontSize: 16 }} numberOfLines={1}>
+          {product.name}
+        </ThemedText>
+        {subtitle ? (
+          <ThemedText type="caption" themeColor="textSecondary" numberOfLines={1}>
+            {subtitle}
+          </ThemedText>
+        ) : null}
+        {hasVariants && (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: stockColor }} />
+            <ThemedText type="caption" style={{ color: stockColor, fontWeight: 600 }}>
+              {out ? 'Out of stock' : low ? `Low · ${stock} left` : `${stock} in stock`}
+            </ThemedText>
+          </View>
+        )}
+      </View>
+      <View style={{ alignItems: 'flex-end', gap: 6 }}>
+        <ThemedText type="smallBold" style={{ fontSize: 16, fontVariant: ['tabular-nums'] }}>
+          {price}
+        </ThemedText>
+        <Icon name="chevronRight" size={14} color={theme.textSecondary} />
+      </View>
+    </Pressable>
+  );
+}

@@ -2,15 +2,22 @@ import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tansta
 
 import type {
   AnalyticsOverview,
+  Category,
   Customer,
   Expense,
   ExpenseCategory,
+  ExpenseSource,
+  FinanceOverview,
   Order,
   OrderStatus,
   Paginated,
+  Payroll,
   PaymentMethod,
   Product,
+  RecurringBill,
+  RecurringFrequency,
   Role,
+  SalaryType,
   ProductDetail,
   ReorderSuggestion,
   ScannedProduct,
@@ -22,6 +29,7 @@ import type {
   SalesChartPoint,
   Shop,
   TopProduct,
+  Upcoming,
 } from '@/api/types';
 import { ApiError, api } from '@/lib/api-client';
 
@@ -63,12 +71,12 @@ export function useTopProducts(days: number, limit = 5) {
 
 // ─── Products ────────────────────────────────────────────────────────────────
 
-export function useProducts(search: string) {
+export function useProducts(search: string, categoryId?: string) {
   return useInfiniteQuery({
-    queryKey: ['products', 'list', search],
+    queryKey: ['products', 'list', search, categoryId ?? null],
     queryFn: ({ pageParam }) =>
       api<Paginated<Product>>('/products', {
-        query: { search, page: pageParam, pageSize: PAGE_SIZE },
+        query: { search, categoryId, page: pageParam, pageSize: PAGE_SIZE },
       }),
     initialPageParam: 1,
     getNextPageParam: nextPage,
@@ -122,7 +130,25 @@ export type NewProductInput = {
   barcode?: string;
   stock?: number;
   categoryId?: string;
+  imageUrl?: string;
 };
+
+export function useCategories() {
+  return useQuery({
+    queryKey: ['categories'],
+    queryFn: () => api<Category[]>('/categories'),
+    staleTime: 5 * 60_000,
+  });
+}
+
+export function useCreateCategory() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { name: string }) =>
+      api<Category>('/categories', { method: 'POST', body: input }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['categories'] }),
+  });
+}
 
 export function useCreateProduct() {
   const queryClient = useQueryClient();
@@ -148,6 +174,8 @@ export type NewOrderInput = {
   discountValue?: number;
   taxRate: number;
   customerId?: string;
+  /** Counter sales are always completed. */
+  status?: 'FULFILLED';
 };
 
 export function useCreateOrder() {
@@ -200,29 +228,54 @@ export type MemberInput = {
   password?: string;
   role: Role;
   shopId?: string;
+  /** Monthly pay — adds them to payroll. */
+  salary?: number;
+  payDay?: number;
 };
 
 export function useAddMember() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: MemberInput) => api<Member>('/members', { method: 'POST', body: input }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['members'] }),
+    onSuccess: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['members'] }),
+        queryClient.invalidateQueries({ queryKey: ['expenses'] }),
+      ]),
   });
 }
 
 export function useUpdateMember() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, ...input }: { id: string; role?: Role; isActive?: boolean; shopId?: string | null }) =>
-      api<Member>(`/members/${id}`, { method: 'PATCH', body: input }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['members'] }),
+    mutationFn: ({
+      id,
+      ...input
+    }: {
+      id: string;
+      role?: Role;
+      isActive?: boolean;
+      shopId?: string | null;
+      /** null or 0 takes them off payroll. */
+      salary?: number | null;
+      payDay?: number;
+    }) => api<Member>(`/members/${id}`, { method: 'PATCH', body: input }),
+    onSuccess: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['members'] }),
+        queryClient.invalidateQueries({ queryKey: ['expenses'] }),
+      ]),
   });
 }
 
 // ─── Suppliers & purchases ───────────────────────────────────────────────────
 
-export function useSuppliers() {
-  return useQuery({ queryKey: ['suppliers', 'list'], queryFn: () => api<Supplier[]>('/suppliers') });
+export function useSuppliers(enabled = true) {
+  return useQuery({
+    queryKey: ['suppliers', 'list'],
+    queryFn: () => api<Supplier[]>('/suppliers'),
+    enabled,
+  });
 }
 
 export function useSupplier(id: string | undefined) {
@@ -257,7 +310,11 @@ export function usePaySupplier() {
   return useMutation({
     mutationFn: ({ supplierId, ...input }: { supplierId: string; amount: number; paymentMethod: PaymentMethod; note?: string }) =>
       api<SupplierDetail>(`/suppliers/${supplierId}/payments`, { method: 'POST', body: input }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['suppliers'] }),
+    // A supplier payment is also an expense.
+    onSuccess: () =>
+      Promise.all(
+        [['suppliers'], ['expenses']].map((queryKey) => queryClient.invalidateQueries({ queryKey })),
+      ),
   });
 }
 
@@ -266,6 +323,8 @@ export type PurchaseInput = {
   items: { productId: string; variantId: string; quantity: number; unitCost: number }[];
   paidAmount: number;
   paymentMethod: PaymentMethod;
+  /** Keep each product's cost price in step with this delivery (server default: on). */
+  updateCostPrice?: boolean;
   note?: string;
 };
 
@@ -275,32 +334,54 @@ export function useCreatePurchase() {
     mutationFn: (input: PurchaseInput) => api<Purchase>('/purchases', { method: 'POST', body: input }),
     onSuccess: () =>
       Promise.all(
-        [['products'], ['suppliers'], ['analytics']].map((queryKey) =>
+        [['products'], ['suppliers'], ['analytics'], ['expenses']].map((queryKey) =>
           queryClient.invalidateQueries({ queryKey }),
         ),
       ),
   });
 }
 
-// ─── Expenses (owner/manager) ────────────────────────────────────────────────
+// ─── Money out: expenses, payroll, recurring bills (owner/manager) ───────────
+//
+// Every query lives under the 'expenses' key, so recording any payment
+// (expense, salary, bill, supplier) refreshes the whole money picture at once.
 
-export function useExpenses() {
+export type ExpenseFilters = { categoryId?: string; source?: ExpenseSource; days?: number };
+
+export function useExpenses(filters: ExpenseFilters = {}) {
+  const { days, ...rest } = filters;
   return useInfiniteQuery({
-    queryKey: ['expenses', 'list'],
-    queryFn: ({ pageParam }) =>
-      api<Paginated<Expense>>('/finance/expenses', { query: { page: pageParam, pageSize: PAGE_SIZE } }),
+    queryKey: ['expenses', 'list', filters],
+    queryFn: ({ pageParam }) => {
+      // Whole days ending today, worked out per request so a screen left open overnight stays right.
+      const from = days ? new Date(Date.now() - (days - 1) * 86_400_000) : undefined;
+      from?.setHours(0, 0, 0, 0);
+      return api<Paginated<Expense> & { totalAmount: number }>('/finance/expenses', {
+        query: { ...rest, from: from?.toISOString(), page: pageParam, pageSize: PAGE_SIZE },
+      });
+    },
     initialPageParam: 1,
     getNextPageParam: nextPage,
   });
 }
 
-export function useExpenseTotal(days: number) {
+/** One expense by id — straight from the API so it works from any list or link. */
+export function useExpense(id: string | undefined) {
   return useQuery({
-    queryKey: ['expenses', 'total', days],
-    queryFn: () =>
-      api<{ totalExpenses: number; totalIncome: number; netProfit: number }>('/finance/overview', {
-        query: { days },
-      }),
+    queryKey: ['expenses', 'detail', id],
+    queryFn: async () => {
+      // No single-item endpoint: the filtered list is cheap and cached.
+      const res = await api<Paginated<Expense>>('/finance/expenses', { query: { pageSize: 100 } });
+      return res.items.find((e) => e.id === id) ?? null;
+    },
+    enabled: !!id,
+  });
+}
+
+export function useFinanceOverview(days: number) {
+  return useQuery({
+    queryKey: ['expenses', 'overview', days],
+    queryFn: () => api<FinanceOverview>('/finance/overview', { query: { days } }),
   });
 }
 
@@ -349,10 +430,150 @@ export function useDeleteExpense() {
   });
 }
 
+/** Bills and salaries that are overdue or due within `days`. */
+export function useUpcoming(days = 7, enabled = true) {
+  return useQuery({
+    queryKey: ['expenses', 'upcoming', days],
+    queryFn: () => api<Upcoming>('/finance/upcoming', { query: { days } }),
+    enabled,
+  });
+}
+
+/** Salaries for a month ('2026-10'); omit for this month. */
+export function usePayroll(month?: string, enabled = true) {
+  return useQuery({
+    queryKey: ['expenses', 'payroll', month ?? 'current'],
+    queryFn: () => api<Payroll>('/finance/payroll', { query: { month } }),
+    enabled,
+  });
+}
+
+export function usePaySalary() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      employeeId,
+      ...input
+    }: {
+      employeeId: string;
+      amount?: number;
+      paymentMethod: PaymentMethod;
+      month?: string;
+      note?: string;
+    }) => api<Expense>(`/finance/employees/${employeeId}/pay`, { method: 'POST', body: input }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['expenses'] }),
+  });
+}
+
+export type EmployeeInput = {
+  name: string;
+  position: string;
+  phone?: string;
+  salary: number;
+  salaryType: SalaryType;
+  payDay: number;
+  joinDate: string;
+  isActive?: boolean;
+};
+
+/** Staff on payroll who don't sign in to the app. */
+export function useSaveEmployee() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...input }: Partial<EmployeeInput> & { id?: string }) =>
+      id
+        ? api(`/finance/employees/${id}`, { method: 'PATCH', body: input })
+        : api('/finance/employees', { method: 'POST', body: input }),
+    onSuccess: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['expenses'] }),
+        queryClient.invalidateQueries({ queryKey: ['members'] }),
+      ]),
+  });
+}
+
+export function useRecurringBills() {
+  return useQuery({
+    queryKey: ['expenses', 'recurring'],
+    queryFn: () => api<RecurringBill[]>('/finance/recurring'),
+  });
+}
+
+export type RecurringInput = {
+  title: string;
+  amount: number;
+  categoryId: string;
+  paymentMethod: PaymentMethod;
+  frequency: RecurringFrequency;
+  nextDueDate: string;
+  notes?: string;
+  isActive?: boolean;
+};
+
+export function useSaveRecurring() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...input }: Partial<RecurringInput> & { id?: string }) =>
+      id
+        ? api<RecurringBill>(`/finance/recurring/${id}`, { method: 'PATCH', body: input })
+        : api<RecurringBill>('/finance/recurring', { method: 'POST', body: input }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['expenses'] }),
+  });
+}
+
+export function useDeleteRecurring() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api(`/finance/recurring/${id}`, { method: 'DELETE' }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['expenses'] }),
+  });
+}
+
+export function usePayRecurring() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...input }: { id: string; amount?: number; paymentMethod?: PaymentMethod }) =>
+      api<Expense>(`/finance/recurring/${id}/pay`, { method: 'POST', body: input }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['expenses'] }),
+  });
+}
+
 export function useReorderSuggestions(enabled: boolean, supplierId?: string) {
   return useQuery({
     queryKey: ['products', 'reorder', supplierId ?? null],
     queryFn: () => api<ReorderSuggestion[]>('/purchases/reorder', { query: { supplierId } }),
     enabled,
+  });
+}
+
+// ─── Shop settings & account ─────────────────────────────────────────────────
+
+/** Fields of PUT /shop (all optional). Applies to the active branch, plus business-wide currency/language. */
+export type ShopSettingsInput = {
+  name?: string;
+  businessName?: string;
+  phone?: string;
+  address?: string;
+  email?: string;
+  currency?: string;
+  language?: 'en' | 'bn';
+  taxRate?: number;
+  taxName?: string;
+  allowNegativeStock?: boolean;
+};
+
+export function useUpdateShop() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: ShopSettingsInput) => api<Shop>('/shop', { method: 'PUT', body: input }),
+    // Prices on screen depend on currency, language and tax.
+    onSuccess: (shop) => queryClient.setQueryData(['shop'], shop),
+  });
+}
+
+export function useChangePassword() {
+  return useMutation({
+    mutationFn: (input: { currentPassword?: string; newPassword: string }) =>
+      api<{ success: boolean }>('/auth/password', { method: 'PATCH', body: input }),
   });
 }

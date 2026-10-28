@@ -9,6 +9,7 @@ export type CartLine = {
   /** null for simple products (hidden default variant). */
   variantName: string | null;
   sku: string | null;
+  imageUrl: string | null;
   price: number;
   quantity: number;
 };
@@ -59,6 +60,7 @@ export function lineFor(product: Product, variantId: string): Omit<CartLine, 'qu
     name: product.name,
     variantName: variant.isDefault ? null : variant.name,
     sku: variant.sku ?? product.sku,
+    imageUrl: product.imageUrl,
     price: variant.price ?? product.price,
   };
 }

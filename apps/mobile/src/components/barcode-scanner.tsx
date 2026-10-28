@@ -10,6 +10,15 @@ import { useTheme } from '@/hooks/use-theme';
 // Retail product codes plus QR. Fewer types = faster, fewer false reads.
 const BARCODE_TYPES: BarcodeType[] = ['ean13', 'ean8', 'upc_a', 'upc_e', 'code128', 'code39', 'qr'];
 
+/** Four L-shaped brackets frame the target instead of a hard rectangle. */
+const CORNER = { borderRadius: 4, borderWidth: 0 };
+const CORNERS = [
+  { key: 'tl', style: { ...CORNER, top: 0, left: 0, borderTopWidth: 3, borderLeftWidth: 3, borderTopLeftRadius: 14 } },
+  { key: 'tr', style: { ...CORNER, top: 0, right: 0, borderTopWidth: 3, borderRightWidth: 3, borderTopRightRadius: 14 } },
+  { key: 'bl', style: { ...CORNER, bottom: 0, left: 0, borderBottomWidth: 3, borderLeftWidth: 3, borderBottomLeftRadius: 14 } },
+  { key: 'br', style: { ...CORNER, bottom: 0, right: 0, borderBottomWidth: 3, borderRightWidth: 3, borderBottomRightRadius: 14 } },
+];
+
 /** The same code is ignored for this long, so one item held under the lens isn't counted 5×. */
 const REPEAT_GUARD_MS = 1500;
 
@@ -85,7 +94,11 @@ export function BarcodeScanner({
       />
       {/* Aim guide */}
       <View pointerEvents="none" style={styles.guideWrap}>
-        <View style={[styles.guide, { borderColor: theme.onPrimary }]} />
+        <View style={styles.guide}>
+          {CORNERS.map((corner) => (
+            <View key={corner.key} style={[styles.corner, corner.style, { borderColor: theme.onPrimary }]} />
+          ))}
+        </View>
       </View>
       {overlay && (
         <View pointerEvents="none" style={styles.overlay}>
@@ -119,11 +132,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   guide: {
-    width: '70%',
-    height: '45%',
-    borderWidth: 2,
-    borderRadius: Radius.md,
-    opacity: 0.8,
+    width: '72%',
+    height: '50%',
+  },
+  corner: {
+    position: 'absolute',
+    width: 28,
+    height: 28,
+    opacity: 0.95,
   },
   overlay: {
     position: 'absolute',

@@ -80,6 +80,9 @@ function PaymentForm({ supplier }: { supplier: SupplierDetail }) {
         )}
         <Segmented options={METHODS} value={method} onChange={setMethod} />
         <TextField label="Note (optional)" value={note} onChangeText={setNote} placeholder="e.g. bKash TrxID" />
+        <ThemedText type="caption" themeColor="textSecondary">
+          This payment is also recorded in your Expenses.
+        </ThemedText>
         {valid && value > due && (
           <ThemedText type="small" themeColor="warning">
             That’s more than you owe — the extra stays as credit with {supplier.name}.

@@ -1,100 +1,178 @@
-import Constants from 'expo-constants';
-import { router } from 'expo-router';
-import { useState } from 'react';
-import { Alert, Platform, ScrollView, StyleSheet } from 'react-native';
+import { Children, type ReactNode } from 'react';
+import { ScrollView, View } from 'react-native';
 
-import { useShop } from '@/api/queries';
-import { Button } from '@/components/button';
-import { Card, DetailRow } from '@/components/card';
-import { ListRow } from '@/components/list-row';
-import { Spacing } from '@/constants/theme';
-import { API_URL } from '@/lib/config';
-import { canEditCatalog, canManage, ROLE_LABEL } from '@/lib/roles';
-import { useActiveShop, useCurrentUser, useSession } from '@/lib/session';
+import { useAnalyticsOverview, useSuppliers, useUpcoming } from '@/api/queries';
+import { FeatureTile } from '@/components/feature-tile';
+import { Icon } from '@/components/icon';
+import { TINT } from '@/components/icon-tile';
+import { ThemedText } from '@/components/themed-text';
+import { Radius, Spacing } from '@/constants/theme';
+import { useTheme } from '@/hooks/use-theme';
+import { useFormatCurrency } from '@/lib/format';
+import { canEditCatalog, canManage } from '@/lib/roles';
+import { useActiveShop, useSession } from '@/lib/session';
 
-export default function AccountScreen() {
-  const user = useCurrentUser();
+/**
+ * The rest of the business: stock, suppliers, expenses, staff and branches.
+ * Tiles appear only for roles that can use them.
+ */
+export default function MoreScreen() {
+  const theme = useTheme();
   const active = useActiveShop();
-  const { signOut, workspaces } = useSession();
-  const { data: shop } = useShop();
-  const [signingOut, setSigningOut] = useState(false);
+  const { workspaces } = useSession();
+  const formatCurrency = useFormatCurrency();
 
+  const editor = canEditCatalog(active.role);
+  const manager = canManage(active.role);
   const branchCount = workspaces.reduce((n, w) => n + w.shops.length, 0);
-  const isOwner = active.role === 'OWNER';
+  const showBranches = branchCount > 1 || active.role === 'OWNER';
 
-  const doSignOut = async () => {
-    setSigningOut(true);
-    await signOut();
-  };
+  const lowStock = useAnalyticsOverview(1).data?.lowStockCount ?? 0;
+  const suppliers = useSuppliers(editor);
+  const totalDue = (suppliers.data ?? []).reduce((sum, s) => sum + Math.max(s.due, 0), 0);
 
-  const confirmSignOut = () => {
-    // Alert.alert has no buttons on web.
-    if (Platform.OS === 'web') return void doSignOut();
-    Alert.alert('Sign out?', 'You will need your email and password to sign back in.', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Sign out', style: 'destructive', onPress: doSignOut },
-    ]);
-  };
+  const upcoming = useUpcoming(7, manager);
+  const dueCount = upcoming.data?.items.length ?? 0;
+
+  const sections: { title: string; tiles: ReactNode[] }[] = [
+    {
+      title: 'Stock',
+      tiles: editor
+        ? [
+            <FeatureTile
+              key="receive"
+              icon="receive"
+              tint={TINT.emerald}
+              title="Receive stock"
+              subtitle="Add goods that were delivered"
+              href="/receive-stock"
+            />,
+            <FeatureTile
+              key="reorder"
+              icon="reorder"
+              tint={TINT.amber}
+              title="Reorder"
+              subtitle={lowStock > 0 ? `${lowStock} item${lowStock === 1 ? '' : 's'} running low` : 'Nothing running low'}
+              href={{ pathname: '/receive-stock', params: { reorder: '1' } }}
+              badge={lowStock > 0 ? { label: String(lowStock), tone: 'danger' } : undefined}
+            />,
+            <FeatureTile
+              key="suppliers"
+              icon="truck"
+              tint={TINT.sky}
+              title="Suppliers"
+              subtitle={totalDue > 0 ? `You owe ${formatCurrency(totalDue)}` : 'Who you buy from'}
+              href="/more/suppliers"
+            />,
+          ]
+        : [],
+    },
+    {
+      title: 'Money',
+      tiles: manager
+        ? [
+            <FeatureTile
+              key="expenses"
+              icon="money"
+              tint={TINT.rose}
+              title="Expenses"
+              subtitle={dueCount > 0 ? `${dueCount} to pay soon` : 'Everything you spend'}
+              href="/more/expenses"
+              badge={upcoming.data && upcoming.data.overdueCount > 0 ? { label: `${upcoming.data.overdueCount} overdue`, tone: 'danger' } : undefined}
+            />,
+            <FeatureTile
+              key="bills"
+              icon="repeat"
+              tint={TINT.violet}
+              title="Bills"
+              subtitle="Rent, internet — repeating"
+              href="/more/bills"
+            />,
+          ]
+        : [],
+    },
+    {
+      title: 'Team & shops',
+      tiles: [
+        ...(manager
+          ? [
+              <FeatureTile
+                key="staff"
+                icon="team"
+                tint={TINT.violet}
+                title="Staff & salaries"
+                subtitle="Access, pay and payroll"
+                href="/more/staff"
+              />,
+            ]
+          : []),
+        ...(showBranches
+          ? [
+              <FeatureTile
+                key="branches"
+                icon="branches"
+                tint={TINT.teal}
+                title="Branches"
+                subtitle={branchCount > 1 ? `${branchCount} outlets · switch or add` : 'Add another outlet'}
+                href="/branches"
+              />,
+            ]
+          : []),
+      ],
+    },
+  ].filter((section) => section.tiles.length > 0);
 
   return (
-    <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={styles.content}>
-      <Card title="Working in">
-        <DetailRow label="Business" value={active.businessName} emphasis />
-        <DetailRow label="Branch" value={active.name} />
-        <DetailRow label="Your role" value={ROLE_LABEL[active.role]} />
-        {(branchCount > 1 || isOwner) && (
-          <Button
-            title={branchCount > 1 ? 'Switch branch' : 'Add a branch'}
-            variant="secondary"
-            onPress={() => router.push('/branches')}
-          />
-        )}
-      </Card>
-
-      {(canManage(active.role) || canEditCatalog(active.role)) && (
-        <Card title="Manage" flush>
-          {canEditCatalog(active.role) && (
-            <ListRow href="/receive-stock" title="Receive stock" subtitle="Add delivered goods to this branch" />
-          )}
-          {canEditCatalog(active.role) && (
-            <ListRow href="/account/suppliers" title="Suppliers" subtitle="Who you buy from and what you owe" />
-          )}
-          {canManage(active.role) && (
-            <ListRow href="/account/expenses" title="Expenses" subtitle="Rent, bills and other spending" />
-          )}
-          {canManage(active.role) && (
-            <ListRow href="/account/staff" title="Staff" subtitle="Accounts, roles and branches" />
-          )}
-        </Card>
+    <ScrollView
+      contentInsetAdjustmentBehavior="automatic"
+      contentContainerStyle={{ padding: Spacing.three, gap: Spacing.four, paddingBottom: Spacing.six }}>
+      {sections.length === 0 ? (
+        <View
+          style={{
+            alignItems: 'center',
+            gap: Spacing.two,
+            padding: Spacing.five,
+            borderRadius: Radius.lg,
+            borderCurve: 'continuous',
+            backgroundColor: theme.backgroundElement,
+          }}>
+          <Icon name="profile" size={34} color={theme.textSecondary} />
+          <ThemedText type="smallBold">Nothing extra for your role</ThemedText>
+          <ThemedText type="small" themeColor="textSecondary" style={{ textAlign: 'center' }}>
+            Your profile and settings are under the picture at the top right.
+          </ThemedText>
+        </View>
+      ) : (
+        sections.map((section) => (
+          <View key={section.title} style={{ gap: Spacing.two }}>
+            <ThemedText
+              type="caption"
+              themeColor="textSecondary"
+              style={{ textTransform: 'uppercase', letterSpacing: 0.6, fontWeight: 700, paddingHorizontal: Spacing.one }}>
+              {section.title}
+            </ThemedText>
+            <TileGrid>{section.tiles}</TileGrid>
+          </View>
+        ))
       )}
-
-      {shop && (
-        <Card title="Shop">
-          <DetailRow label="Currency" value={shop.currency} />
-          <DetailRow label={shop.taxName} value={`${shop.taxRate}%`} />
-          {shop.phone && <DetailRow label="Phone" value={shop.phone} />}
-          {shop.address && <DetailRow label="Address" value={shop.address} />}
-        </Card>
-      )}
-
-      <Card title="You">
-        <DetailRow label="Name" value={user.name} emphasis />
-        <DetailRow label="Email" value={user.email} />
-      </Card>
-
-      <Card title="App">
-        <DetailRow label="Version" value={Constants.expoConfig?.version ?? '—'} />
-        {__DEV__ && <DetailRow label="API" value={API_URL} />}
-      </Card>
-
-      <Button title="Sign out" variant="danger" onPress={confirmSignOut} loading={signingOut} />
     </ScrollView>
   );
 }
 
-const styles = StyleSheet.create({
-  content: {
-    padding: Spacing.three,
-    gap: Spacing.three,
-  },
-});
+/** Two tiles per row; a lone last tile keeps half width instead of stretching. */
+function TileGrid({ children }: { children: ReactNode }) {
+  const tiles = Children.toArray(children);
+  const rows: ReactNode[][] = [];
+  for (let i = 0; i < tiles.length; i += 2) rows.push(tiles.slice(i, i + 2));
+
+  return (
+    <View style={{ gap: Spacing.three }}>
+      {rows.map((row, index) => (
+        <View key={index} style={{ flexDirection: 'row', gap: Spacing.three }}>
+          {row}
+          {row.length === 1 && <View style={{ flex: 1 }} />}
+        </View>
+      ))}
+    </View>
+  );
+}

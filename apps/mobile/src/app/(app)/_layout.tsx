@@ -23,6 +23,10 @@ export default function AppLayout() {
           options={{ presentation: modalPresentation, title: 'New product' }}
         />
         <Stack.Screen
+          name="cart"
+          options={{ presentation: modalPresentation, title: 'Cart' }}
+        />
+        <Stack.Screen
           name="checkout"
           options={{ presentation: modalPresentation, title: 'Checkout' }}
         />
@@ -45,6 +49,29 @@ export default function AppLayout() {
         <Stack.Screen
           name="supplier-payment"
           options={{ presentation: modalPresentation, title: 'Pay supplier' }}
+        />
+        {/* Profile is a normal push (back arrow); its edit forms are sheets. */}
+        <Stack.Screen name="profile" options={{ title: 'Profile' }} />
+        <Stack.Screen name="currency" options={{ title: 'Currency' }} />
+        <Stack.Screen
+          name="shop-form"
+          options={{ presentation: modalPresentation, title: 'Shop details' }}
+        />
+        <Stack.Screen
+          name="change-password"
+          options={{ presentation: modalPresentation, title: 'Change password' }}
+        />
+        <Stack.Screen
+          name="pay-bill"
+          options={{ presentation: modalPresentation, title: 'Record payment' }}
+        />
+        <Stack.Screen
+          name="recurring-form"
+          options={{ presentation: modalPresentation, title: 'Repeating bill' }}
+        />
+        <Stack.Screen
+          name="employee-form"
+          options={{ presentation: modalPresentation, title: 'Payroll' }}
         />
         <Stack.Screen
           name="expense-form"
