@@ -22,6 +22,7 @@ import {
   CreateSupplierPaymentDto,
   ListPurchasesQueryDto,
   ListSuppliersQueryDto,
+  ReorderQueryDto,
   UpdateSupplierDto,
 } from './suppliers.dto.js';
 import { SuppliersService } from './suppliers.service.js';
@@ -81,6 +82,12 @@ export class PurchasesController {
   @Get()
   list(@Tenant() tenant: TenantContext, @Query() query: ListPurchasesQueryDto) {
     return this.suppliers.listPurchases(tenant, query);
+  }
+
+  /** Low-stock items with their usual supplier — feeds “Reorder”. Before :id. */
+  @Get('reorder')
+  reorder(@Tenant() tenant: TenantContext, @Query() query: ReorderQueryDto) {
+    return this.suppliers.reorderSuggestions(tenant, query);
   }
 
   @Get(':id')

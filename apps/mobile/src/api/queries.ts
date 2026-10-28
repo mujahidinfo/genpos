@@ -12,6 +12,7 @@ import type {
   Product,
   Role,
   ProductDetail,
+  ReorderSuggestion,
   ScannedProduct,
   Member,
   Purchase,
@@ -345,5 +346,13 @@ export function useDeleteExpense() {
   return useMutation({
     mutationFn: (id: string) => api(`/finance/expenses/${id}`, { method: 'DELETE' }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['expenses'] }),
+  });
+}
+
+export function useReorderSuggestions(enabled: boolean, supplierId?: string) {
+  return useQuery({
+    queryKey: ['products', 'reorder', supplierId ?? null],
+    queryFn: () => api<ReorderSuggestion[]>('/purchases/reorder', { query: { supplierId } }),
+    enabled,
   });
 }

@@ -4,13 +4,20 @@ import { useRef, useState, type ComponentProps } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { findByBarcode, useCreatePurchase, useProducts, useSuppliers } from '@/api/queries';
+import {
+  findByBarcode,
+  useCreatePurchase,
+  useProducts,
+  useReorderSuggestions,
+  useSuppliers,
+} from '@/api/queries';
 import type { Product } from '@/api/types';
 import { BarcodeScanner } from '@/components/barcode-scanner';
 import { Button } from '@/components/button';
 import { Card } from '@/components/card';
 import { Chip, ChipGroup, Segmented } from '@/components/choice';
 import { HeaderButton } from '@/components/header-button';
+import { QueryState } from '@/components/query-state';
 import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing } from '@/constants/theme';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
@@ -31,21 +38,63 @@ type Payment = 'full' | 'later' | 'part';
 const toNumber = (text: string) => Number(text.replace(/,/g, ''));
 
 /**
+ * `/receive-stock` — receive a delivery. `?supplierId=` preselects the
+ * supplier; `?reorder=1` opens pre-filled with low-stock items (and their usual
+ * supplier) so restocking is a review-and-confirm.
+ */
+export default function ReceiveStockScreen() {
+  const params = useLocalSearchParams<{ supplierId?: string; reorder?: string }>();
+  const reorder = params.reorder === '1';
+  const suggestions = useReorderSuggestions(reorder, params.supplierId);
+
+  if (!reorder) return <ReceiveStockForm initialSupplierId={params.supplierId ?? null} initialLines={[]} />;
+  if (!suggestions.data) {
+    return <QueryState isLoading={suggestions.isLoading} error={suggestions.error} onRetry={suggestions.refetch} />;
+  }
+
+  const items = suggestions.data;
+  // One supplier for everything → preselect it; mixed → let the user choose.
+  const supplierIds = new Set(items.map((i) => i.supplier?.id ?? null));
+  const supplierId = params.supplierId ?? (supplierIds.size === 1 ? [...supplierIds][0] : null);
+  return (
+    <ReceiveStockForm
+      initialSupplierId={supplierId}
+      initialLines={items.map((i) => ({
+        variantId: i.variantId,
+        productId: i.productId,
+        name: i.name,
+        quantity: String(i.suggestedQuantity),
+        unitCost: i.unitCost ? String(i.unitCost) : '',
+      }))}
+      reorderCount={items.length}
+    />
+  );
+}
+
+/**
  * Receive a delivery into the active branch: scan or search each item, set the
  * quantity and what it cost, and record how much the supplier was paid.
  */
-export default function ReceiveStockScreen() {
+function ReceiveStockForm({
+  initialSupplierId,
+  initialLines,
+  reorderCount,
+}: {
+  initialSupplierId: string | null;
+  initialLines: Line[];
+  reorderCount?: number;
+}) {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const isFocused = useIsFocused();
   const formatCurrency = useFormatCurrency();
-  const params = useLocalSearchParams<{ supplierId?: string }>();
   const suppliers = useSuppliers();
   const createPurchase = useCreatePurchase();
 
-  const [supplierId, setSupplierId] = useState<string | null>(params.supplierId ?? null);
-  const [lines, setLines] = useState<Line[]>([]);
-  const [scanning, setScanning] = useState(true);
+  const [supplierId, setSupplierId] = useState<string | null>(initialSupplierId);
+  const [lines, setLines] = useState<Line[]>(initialLines);
+  // A pre-filled reorder is reviewed, not scanned: start with the camera off.
+  const [scanning, setScanning] = useState(reorderCount === undefined);
   const [search, setSearch] = useState('');
   const [pickVariantOf, setPickVariantOf] = useState<Product | null>(null);
   const [notFound, setNotFound] = useState<string | null>(null);
@@ -143,6 +192,13 @@ export default function ReceiveStockScreen() {
       style={[styles.flex, { backgroundColor: theme.background }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        {reorderCount !== undefined && (
+          <ThemedText type="small" themeColor="textSecondary">
+            {reorderCount === 0
+              ? 'Nothing is running low right now.'
+              : `${reorderCount} item${reorderCount === 1 ? '' : 's'} running low. Check quantities and costs, then receive when the delivery arrives.`}
+          </ThemedText>
+        )}
         <ChipGroup label="From supplier">
           <Chip label="No supplier" selected={supplierId === null} onPress={() => setSupplierId(null)} />
           {(suppliers.data ?? []).map((s) => (

@@ -77,6 +77,14 @@ export default function SupplierDetailScreen() {
           )}
         </View>
 
+        <Button
+          title="Reorder low stock from them"
+          variant="secondary"
+          onPress={() =>
+            router.push({ pathname: '/receive-stock', params: { supplierId: supplier.id, reorder: '1' } })
+          }
+        />
+
         {(supplier.phone || supplier.address || supplier.notes) && (
           <Card title="Contact">
             {supplier.phone && (

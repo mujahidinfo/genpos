@@ -42,6 +42,13 @@ export class CreateSupplierPaymentDto extends createZodDto(
   }),
 ) {}
 
+export class ReorderQueryDto extends createZodDto(
+  z.object({
+    // Only items last bought from this supplier.
+    supplierId: z.string().optional(),
+  }),
+) {}
+
 export class ListPurchasesQueryDto extends createZodDto(
   paginationQuery(20).extend({
     supplierId: z.string().optional(),

@@ -259,3 +259,15 @@ export type Expense = {
   notes: string | null;
   category: ExpenseCategory;
 };
+
+/** GET /purchases/reorder — a low-stock item and where it was last bought. */
+export type ReorderSuggestion = {
+  productId: string;
+  variantId: string;
+  name: string;
+  stock: number;
+  lowStock: number;
+  suggestedQuantity: number;
+  unitCost: number;
+  supplier: { id: string; name: string } | null;
+};

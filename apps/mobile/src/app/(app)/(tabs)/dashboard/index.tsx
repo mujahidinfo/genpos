@@ -1,4 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
+import { router } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 
@@ -11,7 +12,8 @@ import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useFormatCurrency } from '@/lib/format';
-import { useCurrentUser } from '@/lib/session';
+import { canEditCatalog } from '@/lib/roles';
+import { useActiveShop, useCurrentUser } from '@/lib/session';
 
 const PERIODS = [
   { label: 'Today', days: 1 },
@@ -21,6 +23,7 @@ const PERIODS = [
 
 export default function HomeScreen() {
   const user = useCurrentUser();
+  const active = useActiveShop();
   const theme = useTheme();
   const queryClient = useQueryClient();
   const formatCurrency = useFormatCurrency();
@@ -85,6 +88,11 @@ export default function HomeScreen() {
               label="Low-stock items"
               value={String(overview.data.lowStockCount)}
               tone={overview.data.lowStockCount > 0 ? 'danger' : undefined}
+              {...(overview.data.lowStockCount > 0 &&
+                canEditCatalog(active.role) && {
+                  actionLabel: 'Reorder',
+                  onPress: () => router.push({ pathname: '/receive-stock', params: { reorder: '1' } }),
+                })}
             />
             <StatTile label="Customers" value={String(overview.data.totalCustomers)} />
           </View>

@@ -19,11 +19,11 @@ In development the app reaches the API on **the machine running Metro** (`hostUr
 |---|---|
 | **Sell** (`/`) | Live barcode scanner + cart. Scan a known item → added with haptic. Scan an unknown barcode → quick-add sheet prefilled with the code (catalog editors), saved straight into the cart. Search for items without barcodes. Charge → checkout |
 | Today | Revenue for today / 7 / 30 days, stat tiles, 7-day chart, top sellers (active branch) |
-| Products | Catalog with branch stock; **Add** opens quick-add with **Save & scan next** for importing a shelf |
+| Products | Catalog with branch stock; **Add** opens quick-add with **Save & scan next** for importing a shelf; a “running low → Reorder” banner |
 | Orders | Search + status filter, order detail |
-| More | Business / branch / role, switch or add branches; **Manage**: Receive stock, Suppliers (balances, payments), Expenses (owners/managers), Staff (roles, branch, access); sign out |
+| More | Business / branch / role, switch or add branches; **Manage**: Receive stock, Suppliers (balances, payments, reorder from them), Expenses (owners/managers), Staff (roles, branch, access); sign out |
 
-Modals above the tabs (`src/app/(app)/`): `add-item` (search & tap-to-add), `new-product` (quick-add), `checkout` (payment, cash received + change, discount, customer, receipt share), `branches`, `receive-stock` (scan/search delivered items, qty + cost, paid / part / later), `member-form`, `supplier-form`, `supplier-payment`, `expense-form` (amount-first, suggested categories created on first use).
+Modals above the tabs (`src/app/(app)/`): `add-item` (search & tap-to-add), `new-product` (quick-add), `checkout` (payment, cash received + change, discount, customer, receipt share), `branches`, `receive-stock` (scan/search delivered items, qty + cost, paid / part / later), `member-form`, `supplier-form`, `supplier-payment`, `expense-form` (amount-first, suggested categories created on first use). `receive-stock?reorder=1` opens pre-filled with low-stock items and their usual supplier (from Products, the Low-stock tile on Today, or a supplier).
 
 ## How it works
 

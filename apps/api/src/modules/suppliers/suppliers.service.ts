@@ -13,6 +13,7 @@ import type {
   CreateSupplierPaymentDto,
   ListPurchasesQueryDto,
   ListSuppliersQueryDto,
+  ReorderQueryDto,
   UpdateSupplierDto,
 } from './suppliers.dto.js';
 
@@ -237,6 +238,75 @@ export class SuppliersService {
     });
 
     return this.getPurchase(tenant, purchase.id);
+  }
+
+  /**
+   * What to reorder in the active branch: items at or below their alert level,
+   * with the supplier and cost of their last delivery and a suggested quantity
+   * (enough to get back to twice the alert level).
+   */
+  async reorderSuggestions(
+    tenant: TenantContext,
+    { supplierId }: ReorderQueryDto,
+  ) {
+    const low = await this.prisma.inventory.findMany({
+      where: {
+        shopId: tenant.shopId,
+        quantity: { lte: this.prisma.inventory.fields.lowStock },
+        variant: { product: { isActive: true } },
+      },
+      include: {
+        variant: {
+          select: {
+            id: true,
+            name: true,
+            isDefault: true,
+            product: { select: { id: true, name: true, costPrice: true } },
+          },
+        },
+      },
+      orderBy: { quantity: 'asc' },
+      take: 200,
+    });
+
+    const lastItems = await this.prisma.purchaseItem.findMany({
+      where: {
+        variantId: { in: low.map((l) => l.variantId) },
+        purchase: { businessId: tenant.businessId },
+      },
+      orderBy: { purchase: { createdAt: 'desc' } },
+      select: {
+        variantId: true,
+        unitCost: true,
+        purchase: {
+          select: { supplier: { select: { id: true, name: true } } },
+        },
+      },
+    });
+    // Newest first, so the first hit per variant is its last delivery.
+    const lastByVariant = new Map<string, (typeof lastItems)[number]>();
+    for (const item of lastItems) {
+      if (!lastByVariant.has(item.variantId))
+        lastByVariant.set(item.variantId, item);
+    }
+
+    return low
+      .map(({ variant, quantity, lowStock }) => {
+        const last = lastByVariant.get(variant.id);
+        return {
+          productId: variant.product.id,
+          variantId: variant.id,
+          name: variant.isDefault
+            ? variant.product.name
+            : `${variant.product.name} (${variant.name})`,
+          stock: quantity,
+          lowStock,
+          suggestedQuantity: Math.max(lowStock * 2 - quantity, 1),
+          unitCost: last?.unitCost ?? variant.product.costPrice,
+          supplier: last?.purchase.supplier ?? null,
+        };
+      })
+      .filter((item) => !supplierId || item.supplier?.id === supplierId);
   }
 
   // ─── Helpers ────────────────────────────────────────────────────────────

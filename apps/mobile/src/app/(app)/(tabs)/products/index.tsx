@@ -1,15 +1,15 @@
 import { router, Stack } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, FlatList, RefreshControl, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, View } from 'react-native';
 
-import { useProducts } from '@/api/queries';
+import { useAnalyticsOverview, useProducts } from '@/api/queries';
 import { Badge } from '@/components/badge';
 import { HeaderButton } from '@/components/header-button';
 import { ListRow, ListSeparator } from '@/components/list-row';
 import { ListSearch } from '@/components/list-search';
 import { QueryState } from '@/components/query-state';
 import { ThemedText } from '@/components/themed-text';
-import { Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { useTheme } from '@/hooks/use-theme';
 import { isLowStock, totalStock, useFormatCurrency } from '@/lib/format';
@@ -23,6 +23,8 @@ export default function ProductsScreen() {
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebouncedValue(search.trim());
   const query = useProducts(debouncedSearch);
+  const lowStockCount = useAnalyticsOverview(1).data?.lowStockCount ?? 0;
+  const showReorder = lowStockCount > 0 && canEditCatalog(shop.role) && !debouncedSearch;
 
   const products = query.data?.pages.flatMap((p) => p.items) ?? [];
 
@@ -42,6 +44,24 @@ export default function ProductsScreen() {
         keyExtractor={(p) => p.id}
         contentInsetAdjustmentBehavior="automatic"
         contentContainerStyle={{ flexGrow: 1 }}
+        ListHeaderComponent={
+          showReorder ? (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => router.push({ pathname: '/receive-stock', params: { reorder: '1' } })}
+              style={({ pressed }) => [
+                styles.banner,
+                { backgroundColor: `${theme.danger}14`, opacity: pressed ? 0.7 : 1 },
+              ]}>
+              <ThemedText type="smallBold" themeColor="danger" style={{ flex: 1 }}>
+                {lowStockCount} item{lowStockCount === 1 ? '' : 's'} running low
+              </ThemedText>
+              <ThemedText type="smallBold" themeColor="primary">
+                Reorder ›
+              </ThemedText>
+            </Pressable>
+          ) : undefined
+        }
         ItemSeparatorComponent={ListSeparator}
         renderItem={({ item }) => {
           const stock = totalStock(item.variants);
@@ -99,3 +119,16 @@ export default function ProductsScreen() {
     </>
   );
 }
+
+const styles = StyleSheet.create({
+  banner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    margin: Spacing.three,
+    marginBottom: Spacing.two,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: 12,
+    borderRadius: Radius.md,
+  },
+});

@@ -59,7 +59,7 @@ Expo SDK 58 / React Native 0.88. Read `apps/mobile/AGENTS.md` first — Expo API
 - `src/app` is routes only; signed-in area is `(app)/` with NativeTabs and one Stack per tab; auth gate via `Stack.Protected` in `src/app/_layout.tsx`
 - API calls go through `api()` in `src/lib/api-client.ts` (token refresh + `X-Shop-Id`); query hooks and mutations live in `src/api/queries.ts`
 - Session (`src/lib/session.tsx`) holds user, businesses and the active branch; `useActiveShop()` gives the branch + role. Cart: `src/lib/cart.tsx`
-- Routes: `sign-in`/`sign-up`/`onboarding` at the root; signed-in app in `(app)/` = `(tabs)/` (Sell first) + POS/admin modals (`add-item`, `new-product`, `checkout`, `branches`, `receive-stock`, `member-form`, `supplier-form`, `supplier-payment`, `expense-form`); shared chips in `src/components/choice.tsx`
+- Routes: `sign-in`/`sign-up`/`onboarding` at the root; signed-in app in `(app)/` = `(tabs)/` (Sell first) + POS/admin modals (`add-item`, `new-product`, `checkout`, `branches`, `receive-stock`, `member-form`, `supplier-form`, `supplier-payment`, `expense-form`; `receive-stock?reorder=1` pre-fills low stock); shared chips in `src/components/choice.tsx`
 - Response types are hand-written in `src/api/types.ts` (dates are ISO strings) — keep in sync with apps/api
 - Money: `useFormatCurrency()` from `src/lib/format.ts` (same locale rule as the web app)
 - Checks: `npx tsc --noEmit`, `npx expo lint`, `npx expo-doctor`

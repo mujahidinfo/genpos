@@ -51,7 +51,7 @@ Access token: JWT (`JWT_ACCESS_TTL`, default 15m). Refresh token: opaque, stored
 | orders | `GET /orders?…`, `GET /orders/:id`, `POST /orders`, `PATCH /orders/:id/status`, `POST /orders/:id/refunds` | refunds: OWNER, MANAGER |
 | analytics | `GET /analytics/{overview,sales-chart,top-products,revenue-by-category}?days` | any |
 | suppliers | `GET /suppliers` (with `totalPurchased`/`totalPaid`/`due`), `GET/PATCH /suppliers/:id`, `POST /suppliers`, `POST /suppliers/:id/payments` | catalog editors; payments: OWNER, MANAGER |
-| purchases | `GET /purchases?supplierId`, `GET /purchases/:id`, `POST /purchases` (receive stock into the active branch) | catalog editors |
+| purchases | `GET /purchases?supplierId`, `GET /purchases/:id`, `POST /purchases` (receive stock into the active branch), `GET /purchases/reorder?supplierId` (low-stock items + usual supplier, last cost, suggested qty) | catalog editors |
 | finance | `GET /finance/overview`, `GET /finance/report`, CRUD under `/finance/{expense-categories,expenses,employees,budgets}` | OWNER, MANAGER |
 
 Catalog editors = OWNER, MANAGER, INVENTORY_MANAGER.
