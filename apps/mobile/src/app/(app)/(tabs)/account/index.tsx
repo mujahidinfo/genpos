@@ -6,9 +6,10 @@ import { Alert, Platform, ScrollView, StyleSheet } from 'react-native';
 import { useShop } from '@/api/queries';
 import { Button } from '@/components/button';
 import { Card, DetailRow } from '@/components/card';
+import { ListRow } from '@/components/list-row';
 import { Spacing } from '@/constants/theme';
 import { API_URL } from '@/lib/config';
-import { ROLE_LABEL } from '@/lib/roles';
+import { canEditCatalog, canManage, ROLE_LABEL } from '@/lib/roles';
 import { useActiveShop, useCurrentUser, useSession } from '@/lib/session';
 
 export default function AccountScreen() {
@@ -49,6 +50,20 @@ export default function AccountScreen() {
           />
         )}
       </Card>
+
+      {(canManage(active.role) || canEditCatalog(active.role)) && (
+        <Card title="Manage" flush>
+          {canEditCatalog(active.role) && (
+            <ListRow href="/receive-stock" title="Receive stock" subtitle="Add delivered goods to this branch" />
+          )}
+          {canEditCatalog(active.role) && (
+            <ListRow href="/account/suppliers" title="Suppliers" subtitle="Who you buy from and what you owe" />
+          )}
+          {canManage(active.role) && (
+            <ListRow href="/account/staff" title="Staff" subtitle="Accounts, roles and branches" />
+          )}
+        </Card>
+      )}
 
       {shop && (
         <Card title="Shop">

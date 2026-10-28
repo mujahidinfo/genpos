@@ -1,12 +1,13 @@
 import * as Haptics from 'expo-haptics';
 import { router, Stack } from 'expo-router';
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Share, StyleSheet, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, Share, StyleSheet, View } from 'react-native';
 
 import { useCreateOrder, useCustomerLookup, useFindOrCreateCustomer, useShop } from '@/api/queries';
 import type { Order, PaymentMethod } from '@/api/types';
 import { Button } from '@/components/button';
 import { Card, DetailRow } from '@/components/card';
+import { Chip, Segmented } from '@/components/choice';
 import { TextField } from '@/components/text-field';
 import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing } from '@/constants/theme';
@@ -287,58 +288,6 @@ export default function CheckoutScreen() {
   );
 }
 
-function Segmented<T extends string>({
-  options,
-  value,
-  onChange,
-}: {
-  options: { value: T; label: string }[];
-  value: T;
-  onChange: (value: T) => void;
-}) {
-  const theme = useTheme();
-  return (
-    <View style={[styles.segmented, { backgroundColor: theme.backgroundSelected }]}>
-      {options.map((o) => {
-        const selected = o.value === value;
-        return (
-          <Pressable
-            key={o.value}
-            accessibilityRole="button"
-            accessibilityState={{ selected }}
-            onPress={() => onChange(o.value)}
-            style={[styles.segment, selected && { backgroundColor: theme.backgroundElement }]}>
-            <ThemedText type="smallBold" themeColor={selected ? 'text' : 'textSecondary'}>
-              {o.label}
-            </ThemedText>
-          </Pressable>
-        );
-      })}
-    </View>
-  );
-}
-
-function Chip({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) {
-  const theme = useTheme();
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ selected }}
-      onPress={onPress}
-      style={[
-        styles.chip,
-        {
-          backgroundColor: selected ? theme.primary : theme.backgroundElement,
-          borderColor: selected ? theme.primary : theme.border,
-        },
-      ]}>
-      <ThemedText type="smallBold" style={{ color: selected ? theme.onPrimary : theme.text }}>
-        {label}
-      </ThemedText>
-    </Pressable>
-  );
-}
-
 const styles = StyleSheet.create({
   flex: {
     flex: 1,
@@ -356,27 +305,10 @@ const styles = StyleSheet.create({
     lineHeight: 56,
     fontWeight: 700,
   },
-  segmented: {
-    flexDirection: 'row',
-    borderRadius: Radius.md,
-    padding: 3,
-  },
-  segment: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderRadius: Radius.sm,
-  },
   chips: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: Spacing.two,
-  },
-  chip: {
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.two,
   },
   footer: {
     padding: Spacing.three,

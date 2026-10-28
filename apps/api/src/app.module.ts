@@ -16,6 +16,7 @@ import { FinanceModule } from './modules/finance/finance.module.js';
 import { HealthController } from './modules/health/health.controller.js';
 import { OrdersModule } from './modules/orders/orders.module.js';
 import { ProductsModule } from './modules/products/products.module.js';
+import { SuppliersModule } from './modules/suppliers/suppliers.module.js';
 import { MembersModule } from './modules/members/members.module.js';
 import { PrismaModule } from './prisma/prisma.module.js';
 
@@ -45,6 +46,7 @@ import { PrismaModule } from './prisma/prisma.module.js';
     OrdersModule,
     AnalyticsModule,
     FinanceModule,
+    SuppliersModule,
   ],
   controllers: [HealthController],
   providers: [

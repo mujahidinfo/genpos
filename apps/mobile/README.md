@@ -21,9 +21,9 @@ In development the app reaches the API on **the machine running Metro** (`hostUr
 | Today | Revenue for today / 7 / 30 days, stat tiles, 7-day chart, top sellers (active branch) |
 | Products | Catalog with branch stock; **Add** opens quick-add with **Save & scan next** for importing a shelf |
 | Orders | Search + status filter, order detail |
-| More | Business / branch / role, switch or add branches, shop info, sign out |
+| More | Business / branch / role, switch or add branches; **Manage**: Receive stock, Suppliers (balances, payments), Staff (roles, branch, access); sign out |
 
-Modals above the tabs (`src/app/(app)/`): `add-item` (search & tap-to-add), `new-product` (quick-add), `checkout` (payment, cash received + change, discount, customer, receipt share), `branches`.
+Modals above the tabs (`src/app/(app)/`): `add-item` (search & tap-to-add), `new-product` (quick-add), `checkout` (payment, cash received + change, discount, customer, receipt share), `branches`, `receive-stock` (scan/search delivered items, qty + cost, paid / part / later), `member-form`, `supplier-form`, `supplier-payment`.
 
 ## How it works
 

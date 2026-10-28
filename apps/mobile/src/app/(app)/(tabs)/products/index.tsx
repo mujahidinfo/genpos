@@ -31,6 +31,7 @@ export default function ProductsScreen() {
       {canEditCatalog(shop.role) && (
         <Stack.Screen
           options={{
+            headerLeft: () => <HeaderButton title="Receive" onPress={() => router.push('/receive-stock')} />,
             headerRight: () => <HeaderButton title="Add" onPress={() => router.push('/new-product')} />,
           }}
         />

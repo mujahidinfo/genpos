@@ -4,21 +4,29 @@ import { ThemedText } from '@/components/themed-text';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
-type CardProps = ViewProps & { title?: string };
+type CardProps = ViewProps & {
+  title?: string;
+  /** Children run edge to edge (e.g. list rows); only the title is padded. */
+  flush?: boolean;
+};
 
-export function Card({ title, style, children, ...rest }: CardProps) {
+export function Card({ title, flush, style, children, ...rest }: CardProps) {
   const theme = useTheme();
 
   return (
     <View
       style={[
         styles.card,
+        flush && styles.flush,
         { backgroundColor: theme.backgroundElement, borderColor: theme.border },
         style,
       ]}
       {...rest}>
       {title && (
-        <ThemedText type="smallBold" themeColor="textSecondary" style={styles.title}>
+        <ThemedText
+          type="smallBold"
+          themeColor="textSecondary"
+          style={[styles.title, flush && styles.flushTitle]}>
           {title}
         </ThemedText>
       )}
@@ -55,6 +63,16 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     padding: Spacing.three,
     gap: Spacing.two,
+  },
+  flush: {
+    padding: 0,
+    gap: 0,
+    overflow: 'hidden',
+  },
+  flushTitle: {
+    paddingHorizontal: Spacing.three,
+    paddingTop: Spacing.three,
+    paddingBottom: Spacing.two,
   },
   title: {
     textTransform: 'uppercase',

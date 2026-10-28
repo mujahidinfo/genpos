@@ -3,11 +3,14 @@ import { z } from 'zod';
 /** Round a money amount to 2 decimal places. */
 export const round2 = (n: number) => parseFloat(n.toFixed(2));
 
-export function generateOrderNumber(): string {
+function documentNumber(prefix: string): string {
   const timestamp = Date.now().toString(36).toUpperCase();
   const random = Math.random().toString(36).substring(2, 6).toUpperCase();
-  return `ORD-${timestamp}-${random}`;
+  return `${prefix}-${timestamp}-${random}`;
 }
+
+export const generateOrderNumber = () => documentNumber('ORD');
+export const generatePurchaseNumber = () => documentNumber('PUR');
 
 // ─── Shared zod pieces ───────────────────────────────────────────────────────
 

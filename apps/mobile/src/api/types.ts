@@ -173,3 +173,66 @@ export type TopProduct = {
   totalQty: number;
   totalRevenue: number;
 };
+
+// ─── Staff ───────────────────────────────────────────────────────────────────
+
+export type Member = {
+  id: string;
+  role: Role;
+  isActive: boolean;
+  /** null = all branches. */
+  shopId: string | null;
+  user: { id: string; name: string; email: string; avatarUrl: string | null };
+  shop: { id: string; name: string } | null;
+};
+
+// ─── Suppliers & purchases ───────────────────────────────────────────────────
+
+export type SupplierBalance = {
+  totalPurchased: number;
+  totalPaid: number;
+  /** What the shop still owes this supplier. */
+  due: number;
+};
+
+export type Supplier = SupplierBalance & {
+  id: string;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  address: string | null;
+  notes: string | null;
+  isActive: boolean;
+};
+
+export type SupplierPayment = {
+  id: string;
+  amount: number;
+  paymentMethod: PaymentMethod;
+  note: string | null;
+  purchaseId: string | null;
+  createdAt: string;
+};
+
+export type SupplierDetail = Supplier & {
+  purchases: {
+    id: string;
+    purchaseNumber: string;
+    total: number;
+    createdAt: string;
+    shop: { id: string; name: string };
+  }[];
+  payments: SupplierPayment[];
+};
+
+export type Purchase = {
+  id: string;
+  purchaseNumber: string;
+  total: number;
+  note: string | null;
+  createdAt: string;
+  supplier: { id: string; name: string } | null;
+  receivedBy: { id: string; name: string };
+  items: { id: string; name: string; quantity: number; unitCost: number; total: number }[];
+  payments: SupplierPayment[];
+};

@@ -8,9 +8,14 @@ import type {
   Paginated,
   PaymentMethod,
   Product,
+  Role,
   ProductDetail,
   ScannedProduct,
+  Member,
+  Purchase,
   ShopSummary,
+  Supplier,
+  SupplierDetail,
   SalesChartPoint,
   Shop,
   TopProduct,
@@ -177,5 +182,99 @@ export function useAddShop() {
   return useMutation({
     mutationFn: (input: { name: string; phone?: string; address?: string }) =>
       api<ShopSummary>('/shops', { method: 'POST', body: input }),
+  });
+}
+
+// ─── Staff ───────────────────────────────────────────────────────────────────
+
+export function useMembers() {
+  return useQuery({ queryKey: ['members'], queryFn: () => api<Member[]>('/members') });
+}
+
+export type MemberInput = {
+  name: string;
+  email: string;
+  password?: string;
+  role: Role;
+  shopId?: string;
+};
+
+export function useAddMember() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: MemberInput) => api<Member>('/members', { method: 'POST', body: input }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['members'] }),
+  });
+}
+
+export function useUpdateMember() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...input }: { id: string; role?: Role; isActive?: boolean; shopId?: string | null }) =>
+      api<Member>(`/members/${id}`, { method: 'PATCH', body: input }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['members'] }),
+  });
+}
+
+// ─── Suppliers & purchases ───────────────────────────────────────────────────
+
+export function useSuppliers() {
+  return useQuery({ queryKey: ['suppliers', 'list'], queryFn: () => api<Supplier[]>('/suppliers') });
+}
+
+export function useSupplier(id: string | undefined) {
+  return useQuery({
+    queryKey: ['suppliers', 'detail', id],
+    queryFn: () => api<SupplierDetail>(`/suppliers/${id}`),
+    enabled: !!id,
+  });
+}
+
+export type SupplierInput = {
+  name: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  notes?: string;
+};
+
+export function useSaveSupplier() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...input }: SupplierInput & { id?: string }) =>
+      id
+        ? api<Supplier>(`/suppliers/${id}`, { method: 'PATCH', body: input })
+        : api<Supplier>('/suppliers', { method: 'POST', body: input }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['suppliers'] }),
+  });
+}
+
+export function usePaySupplier() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ supplierId, ...input }: { supplierId: string; amount: number; paymentMethod: PaymentMethod; note?: string }) =>
+      api<SupplierDetail>(`/suppliers/${supplierId}/payments`, { method: 'POST', body: input }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['suppliers'] }),
+  });
+}
+
+export type PurchaseInput = {
+  supplierId?: string;
+  items: { productId: string; variantId: string; quantity: number; unitCost: number }[];
+  paidAmount: number;
+  paymentMethod: PaymentMethod;
+  note?: string;
+};
+
+export function useCreatePurchase() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: PurchaseInput) => api<Purchase>('/purchases', { method: 'POST', body: input }),
+    onSuccess: () =>
+      Promise.all(
+        [['products'], ['suppliers'], ['analytics']].map((queryKey) =>
+          queryClient.invalidateQueries({ queryKey }),
+        ),
+      ),
   });
 }

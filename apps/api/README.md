@@ -50,6 +50,8 @@ Access token: JWT (`JWT_ACCESS_TTL`, default 15m). Refresh token: opaque, stored
 | customers | `GET /customers?search`, `GET /customers/lookup?phone`, `GET/PATCH /customers/:id`, `POST /customers`, `POST /customers/find-or-create`, `DELETE /customers/:id` | delete: OWNER, MANAGER |
 | orders | `GET /orders?…`, `GET /orders/:id`, `POST /orders`, `PATCH /orders/:id/status`, `POST /orders/:id/refunds` | refunds: OWNER, MANAGER |
 | analytics | `GET /analytics/{overview,sales-chart,top-products,revenue-by-category}?days` | any |
+| suppliers | `GET /suppliers` (with `totalPurchased`/`totalPaid`/`due`), `GET/PATCH /suppliers/:id`, `POST /suppliers`, `POST /suppliers/:id/payments` | catalog editors; payments: OWNER, MANAGER |
+| purchases | `GET /purchases?supplierId`, `GET /purchases/:id`, `POST /purchases` (receive stock into the active branch) | catalog editors |
 | finance | `GET /finance/overview`, `GET /finance/report`, CRUD under `/finance/{expense-categories,expenses,employees,budgets}` | OWNER, MANAGER |
 
 Catalog editors = OWNER, MANAGER, INVENTORY_MANAGER.
@@ -57,6 +59,8 @@ Catalog editors = OWNER, MANAGER, INVENTORY_MANAGER.
 **Products & stock.** Every product has ≥ 1 variant; a simple product gets one hidden `isDefault` variant, so stock always lives on variants. Responses flatten the active branch's inventory onto each variant as `stock` / `lowStock`. `POST /products` accepts `stock` for simple products. Barcodes are unique per business across products *and* variants (409 names the clashing product).
 
 **POS scan.** `GET /products/barcode/:code` → the product plus `matchedVariantId` (the variant to sell). 404 = unknown barcode, so the client offers "add product". `POST /orders` lines may omit `variantId` for simple products; `amountTendered` records cash handed over.
+
+**Suppliers & purchases.** Suppliers are business-wide. `POST /purchases` adds each line to the active branch's inventory, records an `IN` stock movement, updates the product cost price (`updateCostPrice`, default true) and, with `paidAmount`, records a supplier payment. Supplier `due` = purchases − payments.
 
 Dates in query/body are ISO strings (`2026-10-27` or `2026-10-27T10:00:00Z`).
 
