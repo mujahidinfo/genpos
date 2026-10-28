@@ -17,13 +17,17 @@ In development the app reaches the API on **the machine running Metro** (`hostUr
 
 | Tab | Shows |
 |---|---|
-| **Sell** (`/`) | Live barcode scanner + cart. Scan a known item → added with haptic. Scan an unknown barcode → quick-add sheet prefilled with the code (catalog editors), saved straight into the cart. Search for items without barcodes. Charge → checkout |
-| Today | Revenue for today / 7 / 30 days, stat tiles, 7-day chart, top sellers (active branch) |
-| Products | Catalog with branch stock; **Add** opens quick-add with **Save & scan next** for importing a shelf; a “running low → Reorder” banner |
-| Orders | Search + status filter, order detail |
-| More | Business / branch / role, switch or add branches; **Manage**: Receive stock, Suppliers (balances, payments, reorder from them), Expenses (owners/managers), Staff (roles, branch, access); sign out |
+| **Sell** (`/`) | Top bar: shop name (tap to switch branch when you have several) and your profile picture. Search pill + **Scan / Browse** toggle (remembered per device). Browse: category chips and a photo grid — tap adds, −/+ on the card. Scan: camera with bracket framing; an unknown barcode opens quick-add. White floating cart bar → `cart` sheet or Charge. Adding products happens on the Products tab |
+| Today | Greeting, a revenue card with a Today / 7 days / 30 days switch, icon stat tiles (Low-stock → Reorder), 7-day chart, top sellers (active branch) |
+| Products | Search + category chips, photo cards with a coloured stock line, a “running low → Reorder” banner; the floating **+** opens the photo-first `new-product` form |
+| Orders | Newest first. Search + status chips; cards show payment method, customer or first item, total and status. Counter sales are always Completed |
+| More | Icon tiles for the rest of the business, shown per role — **Stock**: Receive stock, Reorder, Suppliers · **Money**: Expenses, Bills · **Team & shops**: Staff & salaries, Branches |
 
-Modals above the tabs (`src/app/(app)/`): `add-item` (search & tap-to-add), `new-product` (quick-add), `checkout` (payment, cash received + change, discount, customer, receipt share), `branches`, `receive-stock` (scan/search delivered items, qty + cost, paid / part / later), `member-form`, `supplier-form`, `supplier-payment`, `expense-form` (amount-first, suggested categories created on first use). `receive-stock?reorder=1` opens pre-filled with low-stock items and their usual supplier (from Products, the Low-stock tile on Today, or a supplier).
+**Money out** (More → Expenses): one screen for everything the business pays — manual expenses, salaries, supplier payments and repeating bills — with a period switch, money in vs out, a "to pay soon" strip with one-tap Pay, spending by category and the full ledger grouped by day. **Bills** (`more/bills`, `recurring-form`) are repeating costs like rent that come due weekly or monthly; **Staff & salaries** show who is paid this month (salary + pay day are set on the staff form, or via `employee-form` for people without an app login). Paying a bill or salary opens `pay-bill`, which records the expense. **Suppliers** list what you owe first; **Receive stock** is a guided flow (who delivered → scan/search → quantities and costs → payment → confirm) ending in a summary.
+
+**Profile & settings** (profile picture, top right of every tab → `/profile`): your photo (tap it to take, choose or remove one), name, email and role; shop name, phone, address, email (tap to edit); language (English / বাংলা), currency, tax on/off + name + rate, sell-below-zero-stock; change password; sign out. Owners and managers can change settings — other roles see them read-only. Note: the app's own text is English for now; the language setting is saved on the shop and drives number formatting and the web dashboard.
+
+Modals above the tabs (`src/app/(app)/`): `add-item` (search & tap-to-add), `new-product` (quick-add), `checkout` (payment, cash received + change, discount, customer, receipt share), `branches`, `profile`, `shop-form`, `currency`, `change-password`, `receive-stock` (scan/search delivered items, qty + cost, paid / part / later), `member-form`, `supplier-form`, `supplier-payment`, `expense-form` (amount-first, suggested categories created on first use, optional repeat), `pay-bill`, `recurring-form`, `employee-form`, `cart` (review the sale). `new-product` is photo-first: take/choose a photo (compressed on device, uploaded via `POST /uploads/product-image` to UploadThing), name, price, stock; cost, barcode and category under “More details”. `receive-stock?reorder=1` opens pre-filled with low-stock items and their usual supplier (from Products, the Low-stock tile on Today, or a supplier).
 
 ## How it works
 

@@ -44,7 +44,7 @@ Access token: JWT (`JWT_ACCESS_TTL`, default 15m). Refresh token: opaque, stored
 | businesses | `GET /businesses` (my businesses + branches), `POST /businesses` (onboarding: business + first branch) | any signed-in user, no `X-Shop-Id` |
 | shops | `GET /shops`, `POST /shops` (add branch) | add: OWNER |
 | shop | `GET /shop` (active branch + business currency/language/role), `PUT /shop`, `PATCH /shop/language` | writes: OWNER, MANAGER |
-| members | `GET /members`, `POST /members` (add staff, optional `shopId`), `PATCH /members/:id` | OWNER, MANAGER |
+| members | `GET /members`, `POST /members` (add staff, optional `shopId`; optional `salary` + `payDay` puts them on payroll), `PATCH /members/:id` (`salary: null` takes them off payroll) | OWNER, MANAGER |
 | categories | `GET/POST /categories`, `PATCH/DELETE /categories/:id` | writes: catalog editors |
 | products | `GET /products?search&categoryId&lowStock&page&pageSize`, `GET /products/:id`, `GET /products/barcode/:code`, `POST /products`, `PATCH/DELETE /products/:id`, `POST /products/:id/stock` | writes: catalog editors |
 | customers | `GET /customers?search`, `GET /customers/lookup?phone`, `GET/PATCH /customers/:id`, `POST /customers`, `POST /customers/find-or-create`, `DELETE /customers/:id` | delete: OWNER, MANAGER |
@@ -52,7 +52,12 @@ Access token: JWT (`JWT_ACCESS_TTL`, default 15m). Refresh token: opaque, stored
 | analytics | `GET /analytics/{overview,sales-chart,top-products,revenue-by-category}?days` | any |
 | suppliers | `GET /suppliers` (with `totalPurchased`/`totalPaid`/`due`), `GET/PATCH /suppliers/:id`, `POST /suppliers`, `POST /suppliers/:id/payments` | catalog editors; payments: OWNER, MANAGER |
 | purchases | `GET /purchases?supplierId`, `GET /purchases/:id`, `POST /purchases` (receive stock into the active branch), `GET /purchases/reorder?supplierId` (low-stock items + usual supplier, last cost, suggested qty) | catalog editors |
-| finance | `GET /finance/overview`, `GET /finance/report`, CRUD under `/finance/{expense-categories,expenses,employees,budgets}` | OWNER, MANAGER |
+| uploads | `POST /uploads/product-image` (multipart `file`, ≤ 4 MB JPEG/PNG/WebP) → `{ url }` on UploadThing; needs `UPLOADTHING_TOKEN` | catalog editors |
+| uploads | `POST /uploads/avatar` (same multipart `file`) sets your profile photo and returns `{ url }`; `DELETE /uploads/avatar` removes it | any signed-in user (no `X-Shop-Id`) |
+| finance | `GET /finance/overview` (totals + spending by category and by `source`), `GET /finance/report`, CRUD under `/finance/{expense-categories,expenses,employees,budgets}` (`GET /finance/expenses` also filters by `source` and returns `totalAmount`) | OWNER, MANAGER |
+| finance / money out | `GET /finance/payroll?month=YYYY-MM` (who is owed / paid), `POST /finance/employees/:id/pay` (salary → expense), `GET/POST/PATCH/DELETE /finance/recurring` (repeating bills), `POST /finance/recurring/:id/pay` (bill → expense, next due date moves on), `GET /finance/upcoming?days=7` (overdue + due-soon bills and salaries) | OWNER, MANAGER |
+
+**One ledger for money out.** Every payment lands in `Expense` with a `source`: `MANUAL`, `SALARY`, `RECURRING`, or `SUPPLIER_PAYMENT` (each supplier payment — at receiving or later — is mirrored into a "Stock purchases" expense; those can't be edited from Expenses). Deliveries on credit aren't expenses until paid (cash basis).
 
 Catalog editors = OWNER, MANAGER, INVENTORY_MANAGER.
 
